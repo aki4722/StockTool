@@ -29,7 +29,7 @@ source venv/bin/activate
 python app.py
 ```
 
-The API runs on `http://localhost:5000`.
+The API binds to `0.0.0.0:5000` and is accessible at `http://<host-ip>:5000` from other machines on the network.
 
 **Endpoints:**
 - `GET /stock/<SYMBOL>` — returns price, change, and change % for a ticker
@@ -41,9 +41,9 @@ Serve the `frontend/` directory with any PHP-capable web server:
 
 ```bash
 cd frontend
-php -S localhost:8080
+php -S 0.0.0.0:8080
 ```
 
-Then open `http://localhost:8080` in your browser.
+Then open `http://<host-ip>:8080` in your browser (or `http://localhost:8080` locally).
 
 > **Note:** `allow_url_fopen` must be enabled in your `php.ini` for the frontend to call the backend API.
