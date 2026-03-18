@@ -10,6 +10,39 @@ $api_base = 'http://localhost:5001';
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <!-- Alert Banner -->
+    <div id="alert-banner" style="display:none" class="alert-banner">
+        <span id="alert-banner-text"></span>
+        <button class="alert-close-btn" onclick="document.getElementById('alert-banner').style.display='none'">✕</button>
+    </div>
+
+    <!-- Alert Settings Modal -->
+    <div id="alert-modal" style="display:none" class="modal-overlay" onclick="if(event.target===this)closeAlertModal()">
+        <div class="modal-box">
+            <h3>Alert: <span id="modal-symbol"></span></h3>
+            <div class="modal-field">
+                <label for="alert-threshold">Threshold (±%)</label>
+                <input type="number" id="alert-threshold" min="0.1" step="0.1" value="5">
+            </div>
+            <div class="modal-field">
+                <label for="alert-interval">Poll interval (sec)</label>
+                <input type="number" id="alert-interval" min="10" step="5" value="30">
+            </div>
+            <div class="modal-field">
+                <label for="alert-lookback">Lookback (min)</label>
+                <input type="number" id="alert-lookback" min="1" step="1" value="3">
+            </div>
+            <div class="modal-field">
+                <label for="alert-enabled">Enabled</label>
+                <input type="checkbox" id="alert-enabled">
+            </div>
+            <div class="modal-buttons">
+                <button onclick="saveAlert()">Save</button>
+                <button class="btn-cancel" onclick="closeAlertModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div class="container index-container">
         <h1>StockTool</h1>
 
@@ -25,12 +58,14 @@ $api_base = 'http://localhost:5001';
         <p class="hint">Enter one or more comma-separated symbols</p>
     </div>
 <script>
+// ── Watchlist helpers ────────────────────────────────────────
 function getWatchlist() {
     return JSON.parse(localStorage.getItem('watchlist') || '[]');
 }
 function removeFromWatchlist(symbol) {
     const list = getWatchlist().filter(s => s !== symbol);
     localStorage.setItem('watchlist', JSON.stringify(list));
+    stopMonitoring(symbol);
     loadWatchlist();
 }
 function esc(str) {
@@ -38,17 +73,141 @@ function esc(str) {
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+// ── Alert settings ───────────────────────────────────────────
+const ALERT_KEY = 'alertSettings';
+function getAlertSettings() {
+    return JSON.parse(localStorage.getItem(ALERT_KEY) || '{}');
+}
+function saveAlertSettings(settings) {
+    localStorage.setItem(ALERT_KEY, JSON.stringify(settings));
+}
+function getSymbolAlert(symbol) {
+    return getAlertSettings()[symbol] || { threshold: 5, interval: 30, lookback: 3, enabled: false };
+}
+
+// ── Alert Modal ──────────────────────────────────────────────
+let modalSymbol = null;
+function openAlertModal(symbol) {
+    modalSymbol = symbol;
+    const cfg = getSymbolAlert(symbol);
+    document.getElementById('modal-symbol').textContent = symbol;
+    document.getElementById('alert-threshold').value = cfg.threshold;
+    document.getElementById('alert-interval').value = cfg.interval;
+    document.getElementById('alert-lookback').value = cfg.lookback;
+    document.getElementById('alert-enabled').checked = cfg.enabled;
+    document.getElementById('alert-modal').style.display = 'flex';
+}
+function closeAlertModal() {
+    document.getElementById('alert-modal').style.display = 'none';
+    modalSymbol = null;
+}
+function saveAlert() {
+    const sym = modalSymbol;
+    const cfg = {
+        threshold: parseFloat(document.getElementById('alert-threshold').value) || 5,
+        interval: parseInt(document.getElementById('alert-interval').value) || 30,
+        lookback: parseInt(document.getElementById('alert-lookback').value) || 3,
+        enabled: document.getElementById('alert-enabled').checked
+    };
+    const settings = getAlertSettings();
+    settings[sym] = cfg;
+    saveAlertSettings(settings);
+    closeAlertModal();
+    stopMonitoring(sym);
+    if (cfg.enabled) startMonitoring(sym);
+    if (lastWatchlistData) renderWatchlist(lastWatchlistData);
+}
+
+// ── Price monitoring ─────────────────────────────────────────
+const priceHistory = {};   // symbol -> [{time, price}]
+const alertIntervals = {}; // symbol -> intervalId
+let lastWatchlistData = null;
+
+function startMonitoring(symbol) {
+    if (alertIntervals[symbol]) return;
+    const cfg = getSymbolAlert(symbol);
+    checkAlert(symbol); // fetch immediately
+    alertIntervals[symbol] = setInterval(() => checkAlert(symbol), cfg.interval * 1000);
+}
+
+function stopMonitoring(symbol) {
+    if (alertIntervals[symbol]) {
+        clearInterval(alertIntervals[symbol]);
+        delete alertIntervals[symbol];
+    }
+}
+
+async function checkAlert(symbol) {
+    try {
+        const resp = await fetch('watchlist_proxy.php?symbols=' + encodeURIComponent(symbol));
+        const data = await resp.json();
+        if (!Array.isArray(data) || !data[0] || data[0].error) return;
+        const price = parseFloat(data[0].price);
+        if (isNaN(price)) return;
+
+        const now = Date.now();
+        if (!priceHistory[symbol]) priceHistory[symbol] = [];
+        priceHistory[symbol].push({ time: now, price });
+
+        const cfg = getSymbolAlert(symbol);
+        const lookbackMs = cfg.lookback * 60 * 1000;
+        priceHistory[symbol] = priceHistory[symbol].filter(e => now - e.time <= lookbackMs);
+
+        if (priceHistory[symbol].length >= 2) {
+            const oldest = priceHistory[symbol][0];
+            const changePct = (price - oldest.price) / oldest.price * 100;
+            if (Math.abs(changePct) >= cfg.threshold) {
+                const sign = changePct >= 0 ? '+' : '';
+                triggerAlert(symbol, sign + changePct.toFixed(2) + '%', price, oldest.price, cfg.lookback);
+            }
+        }
+    } catch (e) { /* ignore network errors */ }
+}
+
+function triggerAlert(symbol, changePct, currentPrice, oldPrice, lookbackMin) {
+    playAlertSound();
+    const banner = document.getElementById('alert-banner');
+    document.getElementById('alert-banner-text').textContent =
+        `ALERT: ${symbol} changed ${changePct} over ${lookbackMin} min  (${parseFloat(oldPrice).toFixed(2)} \u2192 ${parseFloat(currentPrice).toFixed(2)})`;
+    banner.style.display = 'flex';
+    clearTimeout(banner._timer);
+    banner._timer = setTimeout(() => { banner.style.display = 'none'; }, 15000);
+}
+
+function playAlertSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.8);
+    } catch (e) { /* no audio context */ }
+}
+
+// ── Watchlist render ─────────────────────────────────────────
 function renderWatchlist(stocks) {
+    lastWatchlistData = stocks;
     const content = document.getElementById('watchlist-content');
+    const alertSettings = getAlertSettings();
     let html = '<table class="stock-table watchlist-table"><thead><tr>'
         + '<th>Symbol</th><th>Company</th><th>Price</th><th>Change %</th><th></th>'
         + '</tr></thead><tbody>';
     for (const s of stocks) {
+        const alertCfg = alertSettings[s.symbol] || {};
+        const isActive = alertCfg.enabled ? ' alert-active' : '';
+        const alertBtn = `<button class="alert-btn${isActive}" data-symbol="${esc(s.symbol)}" onclick="event.stopPropagation();openAlertModal(this.dataset.symbol)" title="Alert settings">\uD83D\uDD14</button>`;
         if (s.error) {
             html += `<tr class="row-error">`
                 + `<td class="sym">${esc(s.symbol)}</td>`
                 + `<td colspan="3" class="error">${esc(s.error)}</td>`
-                + `<td><button class="remove-btn" data-symbol="${esc(s.symbol)}" onclick="removeFromWatchlist(this.dataset.symbol)">✕</button></td>`
+                + `<td class="action-cell">${alertBtn}<button class="remove-btn" data-symbol="${esc(s.symbol)}" onclick="removeFromWatchlist(this.dataset.symbol)">✕</button></td>`
                 + `</tr>`;
         } else {
             const up = (parseFloat(s.change) || 0) >= 0;
@@ -59,13 +218,14 @@ function renderWatchlist(stocks) {
                 + `<td class="name-cell">${esc(s.name ?? '')}</td>`
                 + `<td class="price-cell">${parseFloat(s.price).toFixed(2)}</td>`
                 + `<td class="${cls}">${sign}${esc(String(s.change_percent))}%</td>`
-                + `<td><button class="remove-btn" data-symbol="${esc(s.symbol)}" onclick="event.stopPropagation();removeFromWatchlist(this.dataset.symbol)">✕</button></td>`
+                + `<td class="action-cell">${alertBtn}<button class="remove-btn" data-symbol="${esc(s.symbol)}" onclick="event.stopPropagation();removeFromWatchlist(this.dataset.symbol)">✕</button></td>`
                 + `</tr>`;
         }
     }
     html += '</tbody></table>';
     content.innerHTML = html;
 }
+
 async function loadWatchlist() {
     const list = getWatchlist();
     const section = document.getElementById('watchlist-section');
@@ -87,7 +247,18 @@ async function loadWatchlist() {
         document.getElementById('watchlist-content').innerHTML = '<p class="error">Could not load watchlist data.</p>';
     }
 }
-document.addEventListener('DOMContentLoaded', loadWatchlist);
+
+function initAlertMonitoring() {
+    const settings = getAlertSettings();
+    for (const [symbol, cfg] of Object.entries(settings)) {
+        if (cfg.enabled) startMonitoring(symbol);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadWatchlist();
+    initAlertMonitoring();
+});
 </script>
 </body>
 </html>
