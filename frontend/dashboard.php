@@ -42,6 +42,7 @@ if ($raw) {
             <table class="stock-table">
                 <thead>
                     <tr>
+                        <th></th>
                         <th>Symbol</th>
                         <th>Company</th>
                         <th>Price</th>
@@ -53,6 +54,7 @@ if ($raw) {
                     <?php foreach ($stocks as $s): ?>
                         <?php if (isset($s['error'])): ?>
                             <tr class="row-error">
+                                <td></td>
                                 <td><?= htmlspecialchars($s['symbol']) ?></td>
                                 <td colspan="4" class="error"><?= htmlspecialchars($s['error']) ?></td>
                             </tr>
@@ -61,9 +63,15 @@ if ($raw) {
                                 $up  = ($s['change'] ?? 0) >= 0;
                                 $cls = $up ? 'positive' : 'negative';
                                 $sign = $up ? '+' : '';
+                                $sym = htmlspecialchars($s['symbol']);
                             ?>
                             <tr class="row-clickable" onclick="window.location='results.php?symbol=<?= urlencode($s['symbol']) ?>'">
-                                <td class="sym"><?= htmlspecialchars($s['symbol']) ?></td>
+                                <td class="star-cell">
+                                    <button class="star-btn" id="star-<?= $sym ?>"
+                                            data-symbol="<?= $sym ?>"
+                                            onclick="event.stopPropagation(); toggleWatchlist(this)">☆</button>
+                                </td>
+                                <td class="sym"><?= $sym ?></td>
                                 <td class="name-cell"><?= htmlspecialchars($s['name'] ?? '') ?></td>
                                 <td class="price-cell">
                                     <?= htmlspecialchars(number_format((float)$s['price'], 2)) ?>
@@ -85,5 +93,35 @@ if ($raw) {
 
         <a href="index.php">← New search</a>
     </div>
+<script>
+function getWatchlist() {
+    return JSON.parse(localStorage.getItem('watchlist') || '[]');
+}
+function saveWatchlist(list) {
+    localStorage.setItem('watchlist', JSON.stringify(list));
+}
+function toggleWatchlist(btn) {
+    const symbol = btn.dataset.symbol;
+    const list = getWatchlist();
+    const idx = list.indexOf(symbol);
+    if (idx >= 0) {
+        list.splice(idx, 1);
+    } else {
+        list.push(symbol);
+    }
+    saveWatchlist(list);
+    updateStar(btn, list);
+}
+function updateStar(btn, list) {
+    const inList = list.includes(btn.dataset.symbol);
+    btn.textContent = inList ? '★' : '☆';
+    btn.classList.toggle('active', inList);
+}
+function updateAllStars() {
+    const list = getWatchlist();
+    document.querySelectorAll('.star-btn').forEach(btn => updateStar(btn, list));
+}
+document.addEventListener('DOMContentLoaded', updateAllStars);
+</script>
 </body>
 </html>

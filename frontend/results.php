@@ -1,6 +1,6 @@
 <?php
 $symbol = strtoupper(trim($_GET['symbol'] ?? ''));
-$api_base = 'http://localhost:5000';
+$api_base = 'http://localhost:5001';
 $data = null;
 $error = null;
 
