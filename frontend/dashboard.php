@@ -43,6 +43,7 @@ if ($raw) {
                 <thead>
                     <tr>
                         <th>Symbol</th>
+                        <th>Company</th>
                         <th>Price</th>
                         <th>Change</th>
                         <th>Change %</th>
@@ -53,7 +54,7 @@ if ($raw) {
                         <?php if (isset($s['error'])): ?>
                             <tr class="row-error">
                                 <td><?= htmlspecialchars($s['symbol']) ?></td>
-                                <td colspan="3" class="error"><?= htmlspecialchars($s['error']) ?></td>
+                                <td colspan="4" class="error"><?= htmlspecialchars($s['error']) ?></td>
                             </tr>
                         <?php else: ?>
                             <?php
@@ -63,6 +64,7 @@ if ($raw) {
                             ?>
                             <tr class="row-clickable" onclick="window.location='results.php?symbol=<?= urlencode($s['symbol']) ?>'">
                                 <td class="sym"><?= htmlspecialchars($s['symbol']) ?></td>
+                                <td class="name-cell"><?= htmlspecialchars($s['name'] ?? '') ?></td>
                                 <td class="price-cell">
                                     <?= htmlspecialchars(number_format((float)$s['price'], 2)) ?>
                                 </td>

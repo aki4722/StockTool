@@ -103,7 +103,7 @@ a:hover {
 
 /* Dashboard */
 .dashboard-container {
-    max-width: 720px;
+    max-width: 900px;
     text-align: left;
 }
 
@@ -140,7 +140,9 @@ a:hover {
 }
 
 .stock-table td:first-child,
-.stock-table th:first-child {
+.stock-table th:first-child,
+.stock-table td:nth-child(2),
+.stock-table th:nth-child(2) {
     text-align: left;
 }
 
@@ -148,6 +150,11 @@ a:hover {
     font-weight: 700;
     color: #38bdf8;
     font-size: 1rem;
+}
+
+.name-cell {
+    color: #94a3b8;
+    font-size: 0.9rem;
 }
 
 .price-cell {
