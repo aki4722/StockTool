@@ -1,3 +1,5 @@
+from typing import Optional
+
 import requests
 from bs4 import BeautifulSoup
 
@@ -10,7 +12,7 @@ HEADERS = {
 }
 
 
-def get_stock_data(symbol: str) -> dict | None:
+def get_stock_data(symbol: str) -> Optional[dict]:
     url = f'https://finance.yahoo.com/quote/{symbol}'
     try:
         response = requests.get(url, headers=HEADERS, timeout=10)
@@ -20,7 +22,7 @@ def get_stock_data(symbol: str) -> dict | None:
 
     soup = BeautifulSoup(response.text, 'lxml')
 
-    def find_value(data_field: str) -> str | None:
+    def find_value(data_field: str) -> Optional[str]:
         tag = soup.find(attrs={'data-field': data_field})
         return tag.get_text(strip=True) if tag else None
 
