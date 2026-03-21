@@ -28,6 +28,7 @@ import pymysql
 import pymysql.cursors
 import requests
 from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
 from scraper import get_stock_data
 
@@ -135,14 +136,17 @@ def setup_database() -> None:
 # ---------------------------------------------------------------------------
 
 def _get_soup(url: str, timeout: int = 15) -> Optional[BeautifulSoup]:
-    """GET a URL and return a BeautifulSoup, or None on failure."""
+    """Fetch URL using Playwright (headless browser) and return BeautifulSoup."""
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=timeout)
-        resp.raise_for_status()
-        resp.encoding = 'utf-8'
-        return BeautifulSoup(resp.text, 'html.parser')
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
+            page = browser.new_page(user_agent=HEADERS['User-Agent'])
+            page.goto(url, wait_until='networkidle', timeout=timeout * 1000)
+            html = page.content()
+            browser.close()
+            return BeautifulSoup(html, 'html.parser')
     except Exception as exc:
-        log.error("GET %s failed: %s", url, exc)
+        log.error("Playwright fetch %s failed: %s", url, exc)
         return None
 
 
