@@ -20,6 +20,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libpango-1.0-0 \
         libpangocairo-1.0-0 \
         libxshmfence1 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxext6 \
+        libxfixes3 \
+        libxrandr2 \
+        libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Configure PHP-FPM: TCP port + allow_url_fopen (needed for file_get_contents HTTP)
