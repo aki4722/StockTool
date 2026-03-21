@@ -39,8 +39,8 @@ RUN PHP_VER=$(php --version | grep -oP '^\S+\s+\K\d+\.\d+') \
 COPY backend/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt gunicorn
 
-# Install Playwright browsers (Chromium for headless scraping)
-RUN playwright install chromium
+# Install Playwright browsers + all system dependencies
+RUN playwright install --with-deps chromium
 
 # Application files
 COPY backend/  /app/backend/
