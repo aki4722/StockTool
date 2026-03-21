@@ -1,6 +1,6 @@
 FROM python:3.9-slim
 
-# Install nginx, PHP-FPM, MySQL client, supervisor
+# Install nginx, PHP-FPM, MySQL client, supervisor, and dependencies for Playwright
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx \
         php-fpm \
@@ -8,6 +8,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         default-mysql-client \
         supervisor \
         curl \
+        libnss3 \
+        libnspr4 \
+        libatk1.0-0 \
+        libatk-bridge2.0-0 \
+        libcups2 \
+        libdbus-1-3 \
+        libdrm2 \
+        libexpat1 \
+        libgbm1 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libxshmfence1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Configure PHP-FPM: TCP port + allow_url_fopen (needed for file_get_contents HTTP)
@@ -20,6 +32,9 @@ RUN PHP_VER=$(php --version | grep -oP '^\S+\s+\K\d+\.\d+') \
 # Python dependencies (+ gunicorn for production)
 COPY backend/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt gunicorn
+
+# Install Playwright browsers (Chromium for headless scraping)
+RUN playwright install chromium
 
 # Application files
 COPY backend/  /app/backend/
