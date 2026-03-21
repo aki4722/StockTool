@@ -18,6 +18,7 @@ Page structure notes (as of 2026-03):
 
 import json
 import logging
+import os
 import re
 import time
 from datetime import date, datetime, timedelta
