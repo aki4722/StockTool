@@ -8,11 +8,12 @@ services:
     ports:
       - "80:80"
     environment:
-      MYSQL_HOST: mysql
-      MYSQL_PORT: "3306"
-      MYSQL_USER: stocktool
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: "${MYSQL_PORT:-3306}"
+      MYSQL_USER: ${MYSQL_USER:-stocktool}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_DATABASE: stocktool_bbs
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-stocktool_bbs}
+      MYSQL_SSL_DISABLED: "true"
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     depends_on:
       mysql:
