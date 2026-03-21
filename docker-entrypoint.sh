@@ -14,6 +14,7 @@ if [ "${MYSQL_HOST}" != "localhost" ] && [ "${MYSQL_HOST}" != "127.0.0.1" ]; the
         -P"${MYSQL_PORT}" \
         -u"${MYSQL_USER}" \
         -p"${MYSQL_PASSWORD}" \
+        --skip-ssl \
         --silent 2>/dev/null; do
         echo "  MySQL not ready, retrying in 3s..."
         sleep 3
@@ -28,6 +29,7 @@ mysql \
     -P"${MYSQL_PORT}" \
     -u"${MYSQL_USER}" \
     -p"${MYSQL_PASSWORD}" \
+    --skip-ssl \
     < /init.sql && echo "Schema ready." || echo "Schema init skipped (may already exist)."
 
 exec /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
