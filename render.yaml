@@ -1,0 +1,47 @@
+services:
+  # ── Web application (nginx + PHP-FPM + Flask) ──────────────────────────────
+  - type: web
+    name: stocktool
+    env: docker
+    plan: starter          # upgrade to standard for always-on
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: MYSQL_HOST
+        fromService:
+          name: stocktool-mysql
+          type: pserv
+          property: host
+      - key: MYSQL_PORT
+        fromService:
+          name: stocktool-mysql
+          type: pserv
+          property: port
+      - key: MYSQL_USER
+        value: stocktool
+      - key: MYSQL_PASSWORD
+        sync: false          # set manually in Render dashboard
+      - key: MYSQL_DATABASE
+        value: stocktool_bbs
+      - key: ANTHROPIC_API_KEY
+        sync: false          # set manually in Render dashboard
+
+  # ── MySQL private service ──────────────────────────────────────────────────
+  - type: pserv
+    name: stocktool-mysql
+    env: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile.mysql
+    disk:
+      name: mysql-data
+      mountPath: /var/lib/mysql
+      sizeGB: 10
+    envVars:
+      - key: MYSQL_DATABASE
+        value: stocktool_bbs
+      - key: MYSQL_USER
+        value: stocktool
+      - key: MYSQL_PASSWORD
+        sync: false          # must match the value set on the web service
+      - key: MYSQL_ROOT_PASSWORD
+        generateValue: true

@@ -247,6 +247,13 @@ a:hover {
     margin: 0;
 }
 
+.watchlist-updated-ts {
+    display: block;
+    margin-top: 0.4rem;
+    color: #475569;
+    font-size: 0.75rem;
+}
+
 .remove-btn {
     background: none;
     border: none;

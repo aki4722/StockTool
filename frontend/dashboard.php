@@ -31,7 +31,7 @@ if ($raw) {
     <div class="container dashboard-container">
         <h1><a href="index.php">StockTool</a></h1>
 
-        <form method="GET" action="dashboard.php" class="dash-form">
+        <form method="GET" action="dashboard.php" class="dash-form" onsubmit="this.elements.symbols.value=normalizeSymbols(this.elements.symbols.value)">
             <input type="text" name="symbols" value="<?= htmlspecialchars($raw) ?>" placeholder="AAPL, MSFT, 6178.T" required>
             <button type="submit">Refresh</button>
         </form>
@@ -46,8 +46,8 @@ if ($raw) {
                         <th>Symbol</th>
                         <th>Company</th>
                         <th>Price</th>
-                        <th>Change</th>
-                        <th>Change %</th>
+                        <th>Change (¥)</th>
+                        <th>Change (%)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -56,7 +56,7 @@ if ($raw) {
                             <tr class="row-error">
                                 <td></td>
                                 <td><?= htmlspecialchars($s['symbol']) ?></td>
-                                <td colspan="4" class="error"><?= htmlspecialchars($s['error']) ?></td>
+                                <td colspan="5" class="error"><?= htmlspecialchars($s['error']) ?></td>
                             </tr>
                         <?php else: ?>
                             <?php
@@ -77,7 +77,7 @@ if ($raw) {
                                     <?= htmlspecialchars(number_format((float)$s['price'], 2)) ?>
                                 </td>
                                 <td class="<?= $cls ?>">
-                                    <?= $sign . htmlspecialchars($s['change']) ?>
+                                    <?= $sign . '¥' . htmlspecialchars(number_format((float)$s['change'], 2)) ?>
                                 </td>
                                 <td class="<?= $cls ?>">
                                     <?= $sign . htmlspecialchars($s['change_percent']) ?>%
@@ -94,6 +94,13 @@ if ($raw) {
         <a href="index.php">← New search</a>
     </div>
 <script>
+function normalizeSymbols(input) {
+    return input.split(',').map(s => {
+        const t = s.trim();
+        return /^\d{4}$/.test(t) ? t + '.T' : t;
+    }).join(', ');
+}
+
 function getWatchlist() {
     return JSON.parse(localStorage.getItem('watchlist') || '[]');
 }

@@ -49,15 +49,23 @@ $api_base = 'http://localhost:5001';
         <div id="watchlist-section" style="display:none" class="watchlist-section">
             <h2>Saved Watchlist</h2>
             <div id="watchlist-content"></div>
+            <small id="watchlist-updated" class="watchlist-updated-ts"></small>
         </div>
 
-        <form method="GET" action="dashboard.php">
+        <form method="GET" action="dashboard.php" onsubmit="this.elements.symbols.value=normalizeSymbols(this.elements.symbols.value)">
             <input type="text" name="symbols" placeholder="AAPL, MSFT, 6178.T" required>
             <button type="submit">Look Up</button>
         </form>
         <p class="hint">Enter one or more comma-separated symbols</p>
     </div>
 <script>
+function normalizeSymbols(input) {
+    return input.split(',').map(s => {
+        const t = s.trim();
+        return /^\d{4}$/.test(t) ? t + '.T' : t;
+    }).join(', ');
+}
+
 // ── Watchlist helpers ────────────────────────────────────────
 function getWatchlist() {
     return JSON.parse(localStorage.getItem('watchlist') || '[]');
@@ -162,6 +170,16 @@ async function checkAlert(symbol) {
                 triggerAlert(symbol, sign + changePct.toFixed(2) + '%', price, oldest.price, cfg.lookback);
             }
         }
+
+        if (lastWatchlistData) {
+            const entry = lastWatchlistData.find(s => s.symbol === symbol);
+            if (entry) {
+                entry.price = data[0].price;
+                entry.change = data[0].change;
+                entry.change_percent = data[0].change_percent;
+            }
+            renderWatchlist(lastWatchlistData, true);
+        }
     } catch (e) { /* ignore network errors */ }
 }
 
@@ -192,12 +210,16 @@ function playAlertSound() {
 }
 
 // ── Watchlist render ─────────────────────────────────────────
-function renderWatchlist(stocks) {
+function renderWatchlist(stocks, showUpdated = false) {
     lastWatchlistData = stocks;
     const content = document.getElementById('watchlist-content');
+    if (showUpdated) {
+        const ts = document.getElementById('watchlist-updated');
+        if (ts) ts.textContent = 'Updated ' + new Date().toLocaleTimeString();
+    }
     const alertSettings = getAlertSettings();
     let html = '<table class="stock-table watchlist-table"><thead><tr>'
-        + '<th>Symbol</th><th>Company</th><th>Price</th><th>Change %</th><th></th>'
+        + '<th>Symbol</th><th>Company</th><th>Price</th><th>Change (¥)</th><th>Change (%)</th><th></th>'
         + '</tr></thead><tbody>';
     for (const s of stocks) {
         const alertCfg = alertSettings[s.symbol] || {};
@@ -206,17 +228,20 @@ function renderWatchlist(stocks) {
         if (s.error) {
             html += `<tr class="row-error">`
                 + `<td class="sym">${esc(s.symbol)}</td>`
-                + `<td colspan="3" class="error">${esc(s.error)}</td>`
+                + `<td colspan="4" class="error">${esc(s.error)}</td>`
                 + `<td class="action-cell">${alertBtn}<button class="remove-btn" data-symbol="${esc(s.symbol)}" onclick="removeFromWatchlist(this.dataset.symbol)">✕</button></td>`
                 + `</tr>`;
         } else {
             const up = (parseFloat(s.change) || 0) >= 0;
             const cls = up ? 'positive' : 'negative';
             const sign = up ? '+' : '';
+            const changeAmt = parseFloat(s.change) || 0;
+            const changeSign = changeAmt >= 0 ? '+' : '';
             html += `<tr class="row-clickable" onclick="window.location='results.php?symbol=${encodeURIComponent(s.symbol)}'">`
                 + `<td class="sym">${esc(s.symbol)}</td>`
                 + `<td class="name-cell">${esc(s.name ?? '')}</td>`
                 + `<td class="price-cell">${parseFloat(s.price).toFixed(2)}</td>`
+                + `<td class="${cls}">${changeSign}¥${Math.abs(changeAmt).toFixed(2)}</td>`
                 + `<td class="${cls}">${sign}${esc(String(s.change_percent))}%</td>`
                 + `<td class="action-cell">${alertBtn}<button class="remove-btn" data-symbol="${esc(s.symbol)}" onclick="event.stopPropagation();removeFromWatchlist(this.dataset.symbol)">✕</button></td>`
                 + `</tr>`;
