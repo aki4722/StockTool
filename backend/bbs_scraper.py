@@ -49,9 +49,9 @@ FORUM_URL_TEMPLATE = 'https://finance.yahoo.co.jp/quote/{code}.T/forum'
 DATABASE_NAME = 'stocktool_bbs'
 
 DB_CONFIG: dict = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': '',
+    'host': os.getenv('MYSQL_HOST', 'localhost'),
+    'user': os.getenv('MYSQL_USER', 'root'),
+    'password': os.getenv('MYSQL_PASSWORD', ''),
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor,
 }

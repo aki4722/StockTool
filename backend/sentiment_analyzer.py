@@ -11,6 +11,7 @@ Functions:
 
 import json
 import logging
+import os
 from datetime import date, datetime
 from typing import Optional
 
@@ -24,9 +25,9 @@ log = logging.getLogger(__name__)
 DATABASE_NAME = 'stocktool_bbs'
 
 DB_CONFIG: dict = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': '',
+    'host': os.getenv('MYSQL_HOST', 'localhost'),
+    'user': os.getenv('MYSQL_USER', 'root'),
+    'password': os.getenv('MYSQL_PASSWORD', ''),
     'database': DATABASE_NAME,
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor,
