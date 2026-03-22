@@ -354,6 +354,7 @@ def fetch_bbs_rankings() -> list[dict]:
     log.info("Fetching BBS ranking from %s", RANKING_URL)
     soup = _get_soup(RANKING_URL)
     if soup is None:
+        log.error("Failed to fetch ranking page")
         return []
 
     entries = _parse_ranking_page(soup)
@@ -366,7 +367,13 @@ def fetch_bbs_rankings() -> list[dict]:
             "[%d/%d] %s  %s",
             i, min(len(entries), 50), code, entry.get('company_name', '')
         )
-        posts = fetch_bbs_posts(code)
+        try:
+            posts = fetch_bbs_posts(code)
+            log.info(f"[{i}/{min(len(entries), 50)}] {code}: fetched {len(posts)} posts")
+        except Exception as e:
+            log.error(f"Error fetching posts for {code}: {e}")
+            posts = []
+            
         symbol = f"{code}.T"
         stock = get_stock_data(symbol)
         results.append({
