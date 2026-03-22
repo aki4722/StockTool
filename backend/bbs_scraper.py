@@ -338,7 +338,7 @@ def fetch_bbs_posts(code: str, limit: int = 100) -> list[str]:
         else:
             url = FORUM_URL_TEMPLATE.format(code=code) + f'?page={page}'
 
-        soup = _get_soup(url)
+        soup = _get_soup(url, timeout=60)  # Extended timeout for slower systems like Mac Mini
         if soup is None:
             break
 
