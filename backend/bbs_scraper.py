@@ -277,6 +277,7 @@ def _extract_nextf_preloaded(soup: BeautifulSoup) -> Optional[dict]:
         # The string looks like: "6:{\"preloadedStore\":{...}}"
         ps_start = unescaped.find('{"preloadedStore"')
         if ps_start == -1:
+            log.debug(f"preloadedStore not found in unescaped content (first 200 chars): {unescaped[:200]}")
             continue
 
         json_fragment = unescaped[ps_start:]
@@ -288,6 +289,7 @@ def _extract_nextf_preloaded(soup: BeautifulSoup) -> Optional[dict]:
         except json.JSONDecodeError as exc:
             log.warning("JSON parse error in preloadedStore: %s", exc)
 
+    log.warning(f"No preloadedStore/bbsComment scripts found. Total scripts: {len(soup.find_all('script'))}")
     return None
 
 
