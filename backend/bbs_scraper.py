@@ -151,10 +151,10 @@ def _get_soup(url: str, timeout: int = 30, retries: int = 2) -> Optional[Beautif
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
                 page = browser.new_page(user_agent=HEADERS['User-Agent'])
-                # Navigate and wait for page to fully load
+                # Navigate with strict networkidle wait
                 page.goto(url, wait_until='networkidle', timeout=timeout * 1000)
-                # Wait for any final JS to execute
-                time.sleep(2)
+                # Extended delay for JS to fully execute (Yahoo uses lazy-loaded content)
+                time.sleep(5)
                 html = page.content()
                 browser.close()
                 log.debug(f"Fetched {len(html)} bytes from {url}")
