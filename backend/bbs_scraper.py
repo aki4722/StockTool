@@ -422,6 +422,10 @@ def save_to_mysql(rankings_data: list[dict], prev_date: Optional[date] = None) -
             for entry in rankings_data:
                 symbol = entry['symbol']
                 status = 'existing' if symbol in prev_symbols else 'new'
+                posts = entry.get('posts', [])
+                post_count = len(posts)
+
+                log.debug(f"Saving {symbol}: {post_count} posts")
 
                 cur.execute(
                     """
@@ -430,20 +434,21 @@ def save_to_mysql(rankings_data: list[dict], prev_date: Optional[date] = None) -
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
-                        today, symbol, entry.get('company_name'), entry.get('post_count'), status,
+                        today, symbol, entry.get('company_name'), post_count, status,
                         entry.get('price'), entry.get('change'), entry.get('change_percent'),
                     )
                 )
                 ranking_id = cur.lastrowid
 
-                for post_text in entry.get('posts', []):
-                    cur.execute(
-                        """
-                        INSERT INTO bbs_posts (ranking_id, symbol, post_content, created_at)
-                        VALUES (%s, %s, %s, %s)
-                        """,
-                        (ranking_id, symbol, post_text, datetime.now())
-                    )
+                for post_text in posts:
+                    if post_text.strip():
+                        cur.execute(
+                            """
+                            INSERT INTO bbs_posts (ranking_id, symbol, post_content, created_at)
+                            VALUES (%s, %s, %s, %s)
+                            """,
+                            (ranking_id, symbol, post_text, datetime.now())
+                        )
 
             # Insert 'dropped' rows for stocks that fell out of today's top-50
             dropped = prev_symbols - today_symbols
