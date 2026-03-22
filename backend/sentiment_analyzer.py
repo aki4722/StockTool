@@ -33,8 +33,8 @@ DB_CONFIG: dict = {
     'cursorclass': pymysql.cursors.DictCursor,
 }
 
-# Use claude-3-5-sonnet for better accuracy (more expensive, slower)
-CLAUDE_MODEL = 'claude-3-5-sonnet-20241022'
+# Use latest Claude model for sentiment analysis
+CLAUDE_MODEL = 'claude-opus-4-1-20250805'  # Updated: supports all required functionality
 
 
 # ---------------------------------------------------------------------------
