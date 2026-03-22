@@ -429,6 +429,9 @@ def save_to_mysql(rankings_data: list[dict], prev_date: Optional[date] = None) -
         today_symbols = {r['symbol'] for r in rankings_data}
 
         with conn.cursor() as cur:
+            # Delete today's data to avoid duplicates (idempotent)
+            cur.execute("DELETE FROM bbs_rankings WHERE date = %s", (today,))
+            log.info(f"Cleared {cur.rowcount} stale rankings for {today}")
             # Insert today's ranked stocks
             for entry in rankings_data:
                 symbol = entry['symbol']
