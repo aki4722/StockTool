@@ -135,23 +135,39 @@ def setup_database() -> None:
 # Scraping helpers
 # ---------------------------------------------------------------------------
 
-def _get_soup(url: str, timeout: int = 15) -> Optional[BeautifulSoup]:
-    """Fetch URL using Playwright (headless browser) and return BeautifulSoup."""
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
-            page = browser.new_page(user_agent=HEADERS['User-Agent'])
-            # Navigate and wait for page to fully load
-            page.goto(url, wait_until='networkidle', timeout=timeout * 1000)
-            # Wait for any final JS to execute
-            time.sleep(2)
-            html = page.content()
-            browser.close()
-            log.debug(f"Fetched {len(html)} bytes from {url}")
-            return BeautifulSoup(html, 'html.parser')
-    except Exception as exc:
-        log.error("Playwright fetch %s failed: %s", url, exc)
-        return None
+def _get_soup(url: str, timeout: int = 30, retries: int = 2) -> Optional[BeautifulSoup]:
+    """Fetch URL using Playwright (headless browser) and return BeautifulSoup.
+    
+    Args:
+        url: Target URL to fetch
+        timeout: Timeout in seconds (default 30)
+        retries: Number of retry attempts (default 2)
+    
+    Returns:
+        BeautifulSoup object or None if fetch fails after all retries
+    """
+    for attempt in range(retries):
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
+                page = browser.new_page(user_agent=HEADERS['User-Agent'])
+                # Navigate and wait for page to fully load
+                page.goto(url, wait_until='networkidle', timeout=timeout * 1000)
+                # Wait for any final JS to execute
+                time.sleep(2)
+                html = page.content()
+                browser.close()
+                log.debug(f"Fetched {len(html)} bytes from {url}")
+                return BeautifulSoup(html, 'html.parser')
+        except Exception as exc:
+            log.warning(f"Playwright fetch attempt {attempt + 1}/{retries} failed for {url}: {exc}")
+            if attempt < retries - 1:
+                time.sleep(3)  # Brief pause before retry
+                continue
+            else:
+                log.error(f"Playwright fetch {url} failed after {retries} attempts")
+                return None
+    return None
 
 
 def _strip_html(text: str) -> str:
