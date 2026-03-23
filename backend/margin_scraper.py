@@ -15,7 +15,6 @@ from typing import Optional
 
 import pymysql
 import pymysql.cursors
-import yfinance as yf
 from playwright.async_api import async_playwright
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -33,25 +32,25 @@ DB_CONFIG: dict = {
 }
 
 
-def get_company_name(symbol: str) -> Optional[str]:
+def extract_company_name(html_content: str) -> Optional[str]:
     """
-    Get company name for a stock symbol using yfinance.
-    
-    Args:
-        symbol: Stock symbol (e.g., '6178.T')
-    
-    Returns:
-        Company name or None if fetch fails
+    Extract company name from Yahoo Finance Japan page.
+    Looks for patterns like: <h1>Sony ... | 6178</h1> or similar
     """
     try:
-        ticker = yf.Ticker(symbol)
-        name = ticker.info.get('longName')
-        if name:
-            return name
-        # Fallback: try shortName
-        return ticker.info.get('shortName')
+        # Try to find company name in h1 or title
+        h1_match = re.search(r'<h1[^>]*>(.*?)\s*[\|／]\s*([0-9]+)', html_content)
+        if h1_match:
+            return h1_match.group(1).strip()
+        
+        # Fallback: look for company name in meta tags
+        title_match = re.search(r'<title>(.*?)\s*-', html_content)
+        if title_match:
+            return title_match.group(1).strip()
+        
+        return None
     except Exception as e:
-        log.warning(f'Could not fetch company name for {symbol}: {e}')
+        log.warning(f'Could not extract company name: {e}')
         return None
 
 
@@ -70,6 +69,7 @@ def extract_margin_data(html_content: str) -> dict:
         'margin_ratio': None,
         'weekly_change_long': None,
         'weekly_change_short': None,
+        'company_name': None,
     }
     
     # 信用買残 (long positions)
@@ -128,9 +128,13 @@ async def fetch_margin_data(symbol: str) -> Optional[dict]:
             
             content = await page.content()
             data = extract_margin_data(content)
+            company_name = extract_company_name(content)
+            
+            if company_name:
+                data['company_name'] = company_name
             
             if data['long_position'] and data['short_position']:
-                log.info(f'{symbol}: Buy={data["long_position"]}, Sell={data["short_position"]}, Ratio={data["margin_ratio"]}')
+                log.info(f'{symbol}: {company_name or symbol}, Buy={data["long_position"]}, Sell={data["short_position"]}, Ratio={data["margin_ratio"]}')
                 return data
             else:
                 log.warning(f'{symbol}: No margin data found in page')
@@ -178,39 +182,27 @@ def create_tables(conn):
 
 
 def get_tracked_symbols(conn) -> list:
-    """Get list of symbols to track from database. Updates company names if missing."""
+    """Get list of symbols to track from database."""
     with conn.cursor() as cur:
-        cur.execute('SELECT symbol, company_name FROM margin_tracking ORDER BY symbol')
+        cur.execute('SELECT symbol FROM margin_tracking ORDER BY symbol')
         results = cur.fetchall()
-        symbols = []
-        
-        for row in results:
-            symbol = row['symbol']
-            company_name = row['company_name']
-            
-            # Fetch company name if not set
-            if not company_name:
-                log.info(f'Fetching company name for {symbol}...')
-                company_name = get_company_name(symbol)
-                
-                if company_name:
-                    cur.execute(
-                        'UPDATE margin_tracking SET company_name = %s WHERE symbol = %s',
-                        (company_name, symbol)
-                    )
-                    conn.commit()
-                    log.info(f'Updated {symbol}: {company_name}')
-            
-            symbols.append(symbol)
-        
-        return symbols
+        return [row['symbol'] for row in results]
 
 
 def save_margin_data(conn, symbol: str, data: dict):
     """Save margin position data to database."""
     today = date.today()
+    company_name = data.get('company_name')
     
     with conn.cursor() as cur:
+        # Update company name if available
+        if company_name:
+            cur.execute(
+                'UPDATE margin_tracking SET company_name = %s WHERE symbol = %s',
+                (company_name, symbol)
+            )
+            conn.commit()
+        
         # Check if data already exists for today
         cur.execute(
             'SELECT id FROM margin_positions WHERE symbol = %s AND date = %s',
