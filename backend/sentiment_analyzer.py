@@ -34,7 +34,7 @@ DB_CONFIG: dict = {
 }
 
 # Use latest Claude model for sentiment analysis
-CLAUDE_MODEL = 'claude-opus-4-1-20250805'  # Updated: supports all required functionality
+CLAUDE_MODEL = 'claude-3-5-sonnet-20241022'  # Fast, balanced model for sentiment analysis
 
 
 # ---------------------------------------------------------------------------
