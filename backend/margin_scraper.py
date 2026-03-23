@@ -15,6 +15,7 @@ from typing import Optional
 
 import pymysql
 import pymysql.cursors
+import yfinance as yf
 from playwright.async_api import async_playwright
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -30,6 +31,28 @@ DB_CONFIG: dict = {
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor,
 }
+
+
+def get_company_name(symbol: str) -> Optional[str]:
+    """
+    Get company name for a stock symbol using yfinance.
+    
+    Args:
+        symbol: Stock symbol (e.g., '6178.T')
+    
+    Returns:
+        Company name or None if fetch fails
+    """
+    try:
+        ticker = yf.Ticker(symbol)
+        name = ticker.info.get('longName')
+        if name:
+            return name
+        # Fallback: try shortName
+        return ticker.info.get('shortName')
+    except Exception as e:
+        log.warning(f'Could not fetch company name for {symbol}: {e}')
+        return None
 
 
 def extract_margin_data(html_content: str) -> dict:
@@ -129,7 +152,7 @@ def create_tables(conn):
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 symbol VARCHAR(20) NOT NULL UNIQUE,
                 company_name VARCHAR(255),
-                added_date DATE DEFAULT CURDATE(),
+                added_date DATE,
                 INDEX idx_symbol (symbol)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
@@ -155,11 +178,32 @@ def create_tables(conn):
 
 
 def get_tracked_symbols(conn) -> list:
-    """Get list of symbols to track from database."""
+    """Get list of symbols to track from database. Updates company names if missing."""
     with conn.cursor() as cur:
-        cur.execute('SELECT symbol FROM margin_tracking ORDER BY symbol')
+        cur.execute('SELECT symbol, company_name FROM margin_tracking ORDER BY symbol')
         results = cur.fetchall()
-        return [row['symbol'] for row in results]
+        symbols = []
+        
+        for row in results:
+            symbol = row['symbol']
+            company_name = row['company_name']
+            
+            # Fetch company name if not set
+            if not company_name:
+                log.info(f'Fetching company name for {symbol}...')
+                company_name = get_company_name(symbol)
+                
+                if company_name:
+                    cur.execute(
+                        'UPDATE margin_tracking SET company_name = %s WHERE symbol = %s',
+                        (company_name, symbol)
+                    )
+                    conn.commit()
+                    log.info(f'Updated {symbol}: {company_name}')
+            
+            symbols.append(symbol)
+        
+        return symbols
 
 
 def save_margin_data(conn, symbol: str, data: dict):
