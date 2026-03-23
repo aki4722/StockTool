@@ -146,5 +146,128 @@ def bbs_ranking():
         conn.close()
 
 
+# ===== MARGIN TRACKING ENDPOINTS =====
+
+@app.route('/api/margin-symbols', methods=['GET'])
+def margin_symbols_get():
+    """Get list of tracked margin symbols."""
+    try:
+        conn = _bbs_connection()
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 503
+    try:
+        with conn.cursor() as cur:
+            cur.execute('SELECT symbol FROM margin_tracking ORDER BY symbol')
+            rows = cur.fetchall()
+        symbols = [row['symbol'] for row in rows]
+        return jsonify(symbols)
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/margin-symbols', methods=['POST'])
+def margin_symbols_post():
+    """Add a new symbol to margin tracking."""
+    data = request.get_json()
+    symbol = data.get('symbol', '').strip().upper()
+    
+    if not symbol:
+        return jsonify({'error': 'Symbol required'}), 400
+    
+    try:
+        conn = _bbs_connection()
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 503
+    
+    try:
+        with conn.cursor() as cur:
+            # Check if already tracked
+            cur.execute('SELECT id FROM margin_tracking WHERE symbol = %s', (symbol,))
+            if cur.fetchone():
+                return jsonify({'error': f'{symbol} already tracked'}), 409
+            
+            # Insert new symbol
+            cur.execute(
+                'INSERT INTO margin_tracking (symbol, added_date) VALUES (%s, %s)',
+                (symbol, date.today())
+            )
+            conn.commit()
+        return jsonify({'symbol': symbol, 'status': 'added'}), 201
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/margin-symbols/<symbol>', methods=['DELETE'])
+def margin_symbols_delete(symbol):
+    """Remove symbol from margin tracking."""
+    symbol = symbol.strip().upper()
+    
+    try:
+        conn = _bbs_connection()
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 503
+    
+    try:
+        with conn.cursor() as cur:
+            cur.execute('DELETE FROM margin_tracking WHERE symbol = %s', (symbol,))
+            conn.commit()
+        return jsonify({'symbol': symbol, 'status': 'removed'})
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/margin-data', methods=['GET'])
+def margin_data():
+    """Get margin position data for all tracked symbols."""
+    try:
+        conn = _bbs_connection()
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 503
+    
+    try:
+        with conn.cursor() as cur:
+            # Get all symbols
+            cur.execute('SELECT symbol FROM margin_tracking ORDER BY symbol')
+            symbols = [row['symbol'] for row in cur.fetchall()]
+            
+            result = {}
+            for symbol in symbols:
+                cur.execute("""
+                    SELECT 
+                        date, symbol, long_position, short_position, 
+                        margin_ratio, weekly_change_long, weekly_change_short
+                    FROM margin_positions
+                    WHERE symbol = %s
+                    ORDER BY date DESC
+                    LIMIT 60
+                """, (symbol,))
+                rows = cur.fetchall()
+                
+                result[symbol] = [
+                    {
+                        'date': str(row['date']),
+                        'symbol': row['symbol'],
+                        'long_position': row['long_position'],
+                        'short_position': row['short_position'],
+                        'margin_ratio': float(row['margin_ratio']) if row['margin_ratio'] else None,
+                        'weekly_change_long': row['weekly_change_long'],
+                        'weekly_change_short': row['weekly_change_short'],
+                    }
+                    for row in rows
+                ]
+            
+            return jsonify(result)
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+    finally:
+        conn.close()
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
