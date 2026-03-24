@@ -107,7 +107,13 @@ def analyze_posts_sentiment(symbol: str, posts_list: list[str]) -> dict:
     if not posts_list:
         return {'sentiment_score': 0.0, 'key_topics': [], 'risk_level': 'medium'}
 
-    client = anthropic.Anthropic()
+    # Explicitly pass API key from environment
+    api_key = os.getenv('ANTHROPIC_API_KEY')
+    if not api_key:
+        log.error('ANTHROPIC_API_KEY not found in environment')
+        return {'sentiment_score': 0.0, 'key_topics': [], 'risk_level': 'medium'}
+    
+    client = anthropic.Anthropic(api_key=api_key)
 
     # Prepare posts text (truncate very long individual posts)
     posts_text = '\n---\n'.join(posts_list[:100])
