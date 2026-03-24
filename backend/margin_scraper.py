@@ -72,18 +72,31 @@ def extract_margin_data(html_content: str) -> dict:
         'company_name': None,
     }
     
-    # 信用買残 (long positions) - match 4+ digit numbers to avoid HTML attributes
-    long_match = re.search(r'信用買残.*?([0-9,]{4,})\s*株', html_content, re.DOTALL)
+    # 信用買残 (long positions) - extract from <dd> tag after <dt>信用買残
+    # Pattern: <dt>信用買残</dt><dd>...数字...株</dd>
+    long_match = re.search(
+        r'<dt[^>]*>.*?信用買残.*?</dt>\s*<dd[^>]*>.*?([0-9,]+)\s*株',
+        html_content,
+        re.DOTALL | re.IGNORECASE
+    )
     if long_match:
         data['long_position'] = int(long_match.group(1).replace(',', ''))
     
-    # 信用売残 (short positions) - match 4+ digit numbers
-    short_match = re.search(r'信用売残.*?([0-9,]{4,})\s*株', html_content, re.DOTALL)
+    # 信用売残 (short positions)
+    short_match = re.search(
+        r'<dt[^>]*>.*?信用売残.*?</dt>\s*<dd[^>]*>.*?([0-9,]+)\s*株',
+        html_content,
+        re.DOTALL | re.IGNORECASE
+    )
     if short_match:
         data['short_position'] = int(short_match.group(1).replace(',', ''))
     
-    # 信用倍率 (margin ratio) - match decimal numbers
-    ratio_match = re.search(r'信用倍率.*?([0-9]+\.[0-9]+)\s*倍', html_content, re.DOTALL)
+    # 信用倍率 (margin ratio)
+    ratio_match = re.search(
+        r'<dt[^>]*>.*?信用倍率.*?</dt>\s*<dd[^>]*>.*?([0-9]+\.[0-9]+)\s*倍',
+        html_content,
+        re.DOTALL | re.IGNORECASE
+    )
     if ratio_match:
         data['margin_ratio'] = float(ratio_match.group(1))
     
