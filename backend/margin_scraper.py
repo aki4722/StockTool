@@ -72,18 +72,18 @@ def extract_margin_data(html_content: str) -> dict:
         'company_name': None,
     }
     
-    # 信用買残 (long positions)
-    long_match = re.search(r'信用買残[：:\s]*([0-9,]+)', html_content)
+    # 信用買残 (long positions) - allow HTML tags between label and number
+    long_match = re.search(r'信用買残.*?([0-9,]+)\s*株', html_content, re.DOTALL)
     if long_match:
         data['long_position'] = int(long_match.group(1).replace(',', ''))
     
-    # 信用売残 (short positions)
-    short_match = re.search(r'信用売残[：:\s]*([0-9,]+)', html_content)
+    # 信用売残 (short positions) - allow HTML tags
+    short_match = re.search(r'信用売残.*?([0-9,]+)\s*株', html_content, re.DOTALL)
     if short_match:
         data['short_position'] = int(short_match.group(1).replace(',', ''))
     
-    # 信用倍率 (margin ratio)
-    ratio_match = re.search(r'信用倍率[：:\s]*([0-9.]+)', html_content)
+    # 信用倍率 (margin ratio) - allow HTML tags
+    ratio_match = re.search(r'信用倍率.*?([0-9.]+)\s*倍', html_content, re.DOTALL)
     if ratio_match:
         data['margin_ratio'] = float(ratio_match.group(1))
     
@@ -127,6 +127,13 @@ async def fetch_margin_data(symbol: str) -> Optional[dict]:
             await page.wait_for_timeout(5000)  # Extra wait for dynamic content
             
             content = await page.content()
+            
+            # DEBUG: Save HTML to file for inspection
+            debug_file = f'/tmp/margin_debug_{symbol.replace(".", "_")}.html'
+            with open(debug_file, 'w', encoding='utf-8') as f:
+                f.write(content)
+            log.info(f'DEBUG: Saved HTML to {debug_file}')
+            
             data = extract_margin_data(content)
             company_name = extract_company_name(content)
             
