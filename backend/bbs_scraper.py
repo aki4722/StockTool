@@ -463,6 +463,13 @@ def save_to_mysql(rankings_data: list[dict], prev_date: Optional[date] = None) -
                     INSERT INTO bbs_rankings
                         (date, symbol, company_name, post_count, status, price, `change`, change_percent)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        company_name = VALUES(company_name),
+                        post_count = VALUES(post_count),
+                        status = VALUES(status),
+                        price = VALUES(price),
+                        `change` = VALUES(`change`),
+                        change_percent = VALUES(change_percent)
                     """,
                     (
                         today, symbol, entry.get('company_name'), post_count, status,
