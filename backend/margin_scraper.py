@@ -11,11 +11,18 @@ import logging
 import os
 import re
 from datetime import date
+from pathlib import Path
 from typing import Optional
 
 import pymysql
 import pymysql.cursors
+from dotenv import load_dotenv
 from playwright.async_api import async_playwright
+from bs4 import BeautifulSoup
+
+# Load environment variables from .env file in parent directory
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(env_path)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 log = logging.getLogger(__name__)
@@ -29,24 +36,34 @@ DB_CONFIG: dict = {
     'database': DATABASE_NAME,
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor,
+    'autocommit': False,
 }
 
 
 def extract_company_name(html_content: str) -> Optional[str]:
     """
-    Extract company name from Yahoo Finance Japan page.
-    Looks for patterns like: <h1>Sony ... | 6178</h1> or similar
+    Extract company name from Yahoo Finance Japan page using BeautifulSoup.
     """
     try:
-        # Try to find company name in h1 or title
-        h1_match = re.search(r'<h1[^>]*>(.*?)\s*[\|／]\s*([0-9]+)', html_content)
-        if h1_match:
-            return h1_match.group(1).strip()
+        soup = BeautifulSoup(html_content, 'html.parser')
         
-        # Fallback: look for company name in meta tags
-        title_match = re.search(r'<title>(.*?)\s*-', html_content)
-        if title_match:
-            return title_match.group(1).strip()
+        # Look for company name in PriceBoard section
+        # Class: PriceBoard__name__166W
+        name_element = soup.find('h2', class_=re.compile(r'PriceBoard__name'))
+        if name_element:
+            company_name = name_element.get_text(strip=True)
+            log.info(f'Extracted company name: {company_name}')
+            return company_name
+        
+        # Fallback: try meta title
+        title = soup.find('title')
+        if title:
+            title_text = title.get_text()
+            # Usually format: "Company Name【CODE】- Yahoo!ファイナンス"
+            if '【' in title_text:
+                company_name = title_text.split('【')[0].strip()
+                log.info(f'Extracted company name from title: {company_name}')
+                return company_name
         
         return None
     except Exception as e:
@@ -56,12 +73,13 @@ def extract_company_name(html_content: str) -> Optional[str]:
 
 def extract_margin_data(html_content: str) -> dict:
     """
-    Extract margin position data from Yahoo Finance page HTML.
+    Extract margin position data from Yahoo Finance page HTML using BeautifulSoup.
     
-    Looks for patterns like:
-    - 信用買残：1,495,100株
-    - 信用売残：206,800株
-    - 信用倍率：7.24倍
+    Looks for:
+    - 信用買残：long position (shares)
+    - 信用売残：short position (shares)
+    - 信用倍率：margin ratio
+    - 前週比：weekly changes
     """
     data = {
         'long_position': None,
@@ -72,49 +90,88 @@ def extract_margin_data(html_content: str) -> dict:
         'company_name': None,
     }
     
-    # 信用買残 (long positions) - extract from <dd> tag after <dt>信用買残
-    # Pattern: <dt>信用買残</dt><dd>...数字...株</dd>
-    long_match = re.search(
-        r'<dt[^>]*>.*?信用買残.*?</dt>\s*<dd[^>]*>.*?([0-9,]+)\s*株',
-        html_content,
-        re.DOTALL | re.IGNORECASE
-    )
-    if long_match:
-        data['long_position'] = int(long_match.group(1).replace(',', ''))
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Find all dt/dd pairs in the margin information section
+        margin_section = soup.find('section', id='margin')
+        if not margin_section:
+            log.warning('Margin section not found in page')
+            return data
+        
+        # Find all dt elements
+        dt_elements = margin_section.find_all('dt')
+        
+        for dt in dt_elements:
+            dt_text = dt.get_text(strip=True)
+            
+            # Find the next dd sibling
+            dd = dt.find_next_sibling('dd')
+            if not dd:
+                continue
+            
+            # Extract value from nested spans
+            # Look for <span class="StyledNumber__value__3rXW">
+            value_span = dd.find('span', class_=re.compile(r'StyledNumber__value'))
+            if not value_span:
+                continue
+            
+            value_text = value_span.get_text(strip=True)
+            
+            # Parse based on label
+            if '信用買残' in dt_text:
+                # Long position
+                try:
+                    data['long_position'] = int(value_text.replace(',', ''))
+                    log.info(f'Extracted long_position: {data["long_position"]}')
+                except ValueError:
+                    log.warning(f'Could not parse long_position: {value_text}')
+            
+            elif '信用売残' in dt_text:
+                # Short position
+                try:
+                    data['short_position'] = int(value_text.replace(',', ''))
+                    log.info(f'Extracted short_position: {data["short_position"]}')
+                except ValueError:
+                    log.warning(f'Could not parse short_position: {value_text}')
+            
+            elif '信用倍率' in dt_text:
+                # Margin ratio
+                try:
+                    data['margin_ratio'] = float(value_text.replace(',', ''))
+                    log.info(f'Extracted margin_ratio: {data["margin_ratio"]}')
+                except ValueError:
+                    log.warning(f'Could not parse margin_ratio: {value_text}')
+            
+            elif '前週比' in dt_text and '買' not in dt_text and '売' not in dt_text:
+                # Weekly change - determine if it's for long or short
+                # First occurrence is usually for long positions
+                parent_li = dt.find_parent('li')
+                if parent_li:
+                    # Check if this is the first or second weekly change
+                    all_weekly_changes = margin_section.find_all('dt', string=re.compile('前週比'))
+                    if all_weekly_changes and all_weekly_changes[0] == dt:
+                        # First occurrence - weekly change for long
+                        try:
+                            clean_value = value_text.replace(',', '').replace('+', '')
+                            data['weekly_change_long'] = int(clean_value)
+                            log.info(f'Extracted weekly_change_long: {data["weekly_change_long"]}')
+                        except ValueError:
+                            log.warning(f'Could not parse weekly_change_long: {value_text}')
+                    elif len(all_weekly_changes) > 1 and all_weekly_changes[1] == dt:
+                        # Second occurrence - weekly change for short
+                        try:
+                            clean_value = value_text.replace(',', '').replace('+', '')
+                            data['weekly_change_short'] = int(clean_value)
+                            log.info(f'Extracted weekly_change_short: {data["weekly_change_short"]}')
+                        except ValueError:
+                            log.warning(f'Could not parse weekly_change_short: {value_text}')
+        
+        return data
     
-    # 信用売残 (short positions)
-    short_match = re.search(
-        r'<dt[^>]*>.*?信用売残.*?</dt>\s*<dd[^>]*>.*?([0-9,]+)\s*株',
-        html_content,
-        re.DOTALL | re.IGNORECASE
-    )
-    if short_match:
-        data['short_position'] = int(short_match.group(1).replace(',', ''))
-    
-    # 信用倍率 (margin ratio)
-    ratio_match = re.search(
-        r'<dt[^>]*>.*?信用倍率.*?</dt>\s*<dd[^>]*>.*?([0-9]+\.[0-9]+)\s*倍',
-        html_content,
-        re.DOTALL | re.IGNORECASE
-    )
-    if ratio_match:
-        data['margin_ratio'] = float(ratio_match.group(1))
-    
-    # 前週比買い (weekly change long)
-    weekly_long_match = re.search(r'前週比.*?([+\-]?[0-9,]+)\s*株', html_content)
-    if weekly_long_match:
-        data['weekly_change_long'] = int(weekly_long_match.group(1).replace(',', ''))
-    
-    # 前週比売り (weekly change short) - more complex
-    # Try to find second occurrence
-    weekly_matches = re.findall(r'([+\-]?[0-9,]+)\s*株', html_content)
-    if len(weekly_matches) >= 2:
-        try:
-            data['weekly_change_short'] = int(weekly_matches[1].replace(',', ''))
-        except (ValueError, IndexError):
-            pass
-    
-    return data
+    except Exception as e:
+        log.error(f'Error parsing HTML with BeautifulSoup: {e}')
+        return data
 
 
 async def fetch_margin_data(symbol: str) -> Optional[dict]:
@@ -140,13 +197,6 @@ async def fetch_margin_data(symbol: str) -> Optional[dict]:
             await page.wait_for_timeout(5000)  # Extra wait for dynamic content
             
             content = await page.content()
-            
-            # DEBUG: Save HTML to file for inspection
-            debug_file = f'/tmp/margin_debug_{symbol.replace(".", "_")}.html'
-            with open(debug_file, 'w', encoding='utf-8') as f:
-                f.write(content)
-            log.info(f'DEBUG: Saved HTML to {debug_file}')
-            
             data = extract_margin_data(content)
             company_name = extract_company_name(content)
             
@@ -229,7 +279,9 @@ def save_margin_data(conn, symbol: str, data: dict):
             (symbol, today)
         )
         
-        if cur.fetchone():
+        existing = cur.fetchone()
+        
+        if existing:
             log.info(f'{symbol} data already exists for {today}, skipping')
             return
         
@@ -255,6 +307,7 @@ def save_margin_data(conn, symbol: str, data: dict):
 
 async def scrape_all_margins():
     """Main scraping function for all tracked symbols."""
+    conn = None
     try:
         conn = pymysql.connect(**DB_CONFIG)
         create_tables(conn)
@@ -263,7 +316,8 @@ async def scrape_all_margins():
         
         if not symbols:
             log.warning('No tracked symbols found in database')
-            conn.close()
+            if conn:
+                conn.close()
             return
         
         log.info(f'Starting margin position scrape for {len(symbols)} symbols')
@@ -276,12 +330,20 @@ async def scrape_all_margins():
             else:
                 log.warning(f'Failed to get margin data for {symbol}')
         
+        # Ensure all changes are committed before closing
+        conn.commit()
+        log.info('All changes committed to database')
         log.info('Margin position scrape completed')
-        conn.close()
     
     except Exception as e:
         log.error(f'Fatal error during margin scrape: {e}')
+        if conn:
+            conn.rollback()
         raise
+    
+    finally:
+        if conn:
+            conn.close()
 
 
 if __name__ == '__main__':
