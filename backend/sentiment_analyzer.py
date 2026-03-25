@@ -18,6 +18,10 @@ from typing import Optional
 import anthropic
 import pymysql
 import pymysql.cursors
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 log = logging.getLogger(__name__)
@@ -325,9 +329,11 @@ def _print_results(target_date: date) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    """Run sentiment analysis for 2026-03-20 and verify results."""
+    """Run sentiment analysis for today's BBS data."""
     log.info("=== Stage 2: LLM Sentiment Analysis ===")
-    analyze_bbs_ranking('2026-03-20')
+    today = date.today().isoformat()
+    log.info(f"Analyzing BBS data for {today}")
+    analyze_bbs_ranking(today)
 
 
 if __name__ == '__main__':

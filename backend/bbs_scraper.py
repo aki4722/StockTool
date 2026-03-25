@@ -28,6 +28,10 @@ import pymysql
 import pymysql.cursors
 import requests
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 from playwright.sync_api import sync_playwright
 
 from scraper import get_stock_data
