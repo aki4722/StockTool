@@ -22,6 +22,7 @@ import os
 import re
 import time
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 import pymysql
@@ -30,8 +31,9 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file in parent directory
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 from playwright.sync_api import sync_playwright
 
 from scraper import get_stock_data
@@ -499,6 +501,10 @@ def save_to_mysql(rankings_data: list[dict], prev_date: Optional[date] = None) -
                     """
                     INSERT INTO bbs_rankings (date, symbol, company_name, post_count, status)
                     VALUES (%s, %s, NULL, NULL, 'dropped')
+                    ON DUPLICATE KEY UPDATE
+                        status = 'dropped',
+                        company_name = NULL,
+                        post_count = NULL
                     """,
                     (today, symbol)
                 )

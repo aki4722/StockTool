@@ -13,6 +13,7 @@ import json
 import logging
 import os
 from datetime import date, datetime
+from pathlib import Path
 from typing import Optional
 
 import anthropic
@@ -20,8 +21,9 @@ import pymysql
 import pymysql.cursors
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file in parent directory
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 log = logging.getLogger(__name__)

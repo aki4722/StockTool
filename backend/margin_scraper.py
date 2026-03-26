@@ -22,7 +22,7 @@ from bs4 import BeautifulSoup
 
 # Load environment variables from .env file in parent directory
 env_path = Path(__file__).parent.parent / '.env'
-load_dotenv(env_path)
+load_dotenv(dotenv_path=env_path)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 log = logging.getLogger(__name__)
