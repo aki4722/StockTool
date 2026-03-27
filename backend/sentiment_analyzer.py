@@ -127,27 +127,27 @@ def analyze_posts_sentiment(symbol: str, posts_list: list[str]) -> dict:
     if len(posts_text) > 12000:
         posts_text = posts_text[:12000] + '\n...(truncated)'
 
-    prompt = f"""You are a Japanese stock market analyst. Analyze the following BBS (bulletin board) posts about stock symbol {symbol} from Yahoo Finance Japan.
+    prompt = f"""あなたは日本株市場のアナリストです。Yahoo Finance Japanの株式掲示板の投稿を分析してください。
 
-These are investor/trader forum posts. Many may be in Japanese.
+対象銘柄: {symbol}
 
-BBS Posts:
+掲示板の投稿:
 {posts_text}
 
-Analyze these posts and respond with a JSON object containing exactly these fields:
+以下のフィールドを含むJSONオブジェクトで回答してください:
 {{
-  "sentiment_score": <float between -1.0 and 1.0>,
-  "key_topics": <array of 3-7 topic strings in English>,
+  "sentiment_score": <-1.0から1.0の間の数値>,
+  "key_topics": <3〜7個のキーワードの配列（日本語で）>,
   "risk_level": "<low|medium|high>",
-  "reasoning": "<1-2 sentence summary>"
+  "reasoning": "<1〜2文の要約（日本語で）>"
 }}
 
-Scoring guide:
-- sentiment_score: -1.0 = strongly bearish/negative, 0.0 = neutral/mixed, +1.0 = strongly bullish/positive
-- key_topics: identify main themes (e.g. "earnings beat", "technical breakout", "dividend cut", "insider selling")
-- risk_level: low = mostly calm/factual posts, medium = some speculation/concern, high = panic/controversy/risk warnings
+スコアリング基準:
+- sentiment_score: -1.0 = 強い弱気/ネガティブ, 0.0 = 中立/混在, +1.0 = 強い強気/ポジティブ
+- key_topics: 主なテーマを特定（例: "決算好調", "テクニカル上昇", "配当減配", "インサイダー売却", "地政学リスク"など、必ず日本語で）
+- risk_level: low = 冷静/事実的な投稿が多い, medium = 投機的/懸念が一部, high = パニック/論争/リスク警告
 
-Respond ONLY with the JSON object, no other text."""
+JSON形式のみで回答し、他の文章は含めないでください。"""
 
     response = client.messages.create(
         model=CLAUDE_MODEL,
