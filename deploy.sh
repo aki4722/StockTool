@@ -29,9 +29,9 @@ echo -e "${BLUE}[2/3] Deploying Frontend (Mac Mini)...${NC}"
 cd ~/.openclaw/workspace/StockTool-Frontend
 git pull origin main
 
-# Copy files to Mac Mini
+# Copy files to Mac Mini (direct to ~/StockTool/, no frontend/ subdirectory)
 echo "Copying files to Mac Mini..."
-rsync -av --exclude 'venv' --exclude '.git' --exclude 'deploy.sh' \
+rsync -av --exclude 'venv' --exclude '.git' --exclude 'deploy.sh' --exclude 'README.md' \
   ./*.php ./css/ akimoto@192.168.2.27:~/StockTool/
 
 echo -e "${GREEN}✅ Frontend deployed${NC}"
