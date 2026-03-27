@@ -215,6 +215,18 @@ def analyze_bbs_ranking(date_str: str) -> None:
         date_str: Date string in 'YYYY-MM-DD' format
     """
     target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    
+    # Determine scrape time based on current hour (08:00 or 20:00)
+    current_hour = datetime.now().hour
+    if 6 <= current_hour < 14:
+        scrape_time = '08:00:00'
+    elif 18 <= current_hour <= 23 or 0 <= current_hour < 2:
+        scrape_time = '20:00:00'
+    else:
+        # Default to 08:00 for manual runs
+        scrape_time = '08:00:00'
+    
+    log.info(f"Analyzing sentiment for scrape_time={scrape_time}")
 
     setup_sentiment_table()
 
@@ -229,11 +241,11 @@ def analyze_bbs_ranking(date_str: str) -> None:
                        GROUP_CONCAT(p.post_content SEPARATOR '\n---\n') AS posts_text
                 FROM bbs_rankings r
                 JOIN bbs_posts p ON p.ranking_id = r.id
-                WHERE r.date = %s AND r.status != 'dropped'
+                WHERE r.date = %s AND r.scrape_time = %s AND r.status != 'dropped'
                 GROUP BY r.symbol, r.company_name, r.price, r.`change`, r.change_percent
                 ORDER BY r.symbol
                 """,
-                (target_date,)
+                (target_date, scrape_time)
             )
             rows = cur.fetchall()
 
@@ -261,9 +273,9 @@ def analyze_bbs_ranking(date_str: str) -> None:
                 cur.execute(
                     """
                     INSERT INTO bbs_sentiment
-                        (symbol, date, sentiment_score, key_topics, risk_level, analyzed_at,
+                        (symbol, date, scrape_time, sentiment_score, key_topics, risk_level, analyzed_at,
                          price, `change`, change_percent)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
                         sentiment_score = VALUES(sentiment_score),
                         key_topics      = VALUES(key_topics),
@@ -276,6 +288,7 @@ def analyze_bbs_ranking(date_str: str) -> None:
                     (
                         symbol,
                         target_date,
+                        scrape_time,
                         result['sentiment_score'],
                         json.dumps(result['key_topics'], ensure_ascii=False),
                         result['risk_level'],
@@ -293,10 +306,10 @@ def analyze_bbs_ranking(date_str: str) -> None:
     log.info("=== Sentiment analysis complete for %s ===", date_str)
 
     # Show results
-    _print_results(target_date)
+    _print_results(target_date, scrape_time)
 
 
-def _print_results(target_date: date) -> None:
+def _print_results(target_date: date, scrape_time: str = '08:00:00') -> None:
     """Print a summary of sentiment results from DB."""
     conn = get_connection()
     try:
@@ -305,10 +318,10 @@ def _print_results(target_date: date) -> None:
                 """
                 SELECT symbol, sentiment_score, key_topics, risk_level, analyzed_at
                 FROM bbs_sentiment
-                WHERE date = %s
+                WHERE date = %s AND scrape_time = %s
                 ORDER BY sentiment_score DESC
                 """,
-                (target_date,)
+                (target_date, scrape_time)
             )
             rows = cur.fetchall()
 

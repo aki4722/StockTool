@@ -446,6 +446,18 @@ def save_to_mysql(rankings_data: list[dict], prev_date: Optional[date] = None) -
     today = date.today()
     if prev_date is None:
         prev_date = today - timedelta(days=1)
+    
+    # Determine scrape time based on current hour (08:00 or 20:00)
+    current_hour = datetime.now().hour
+    if 6 <= current_hour < 14:
+        scrape_time = '08:00:00'
+    elif 18 <= current_hour <= 23 or 0 <= current_hour < 2:
+        scrape_time = '20:00:00'
+    else:
+        # Default to 08:00 for manual runs outside scheduled times
+        scrape_time = '08:00:00'
+    
+    log.info(f"Saving data with scrape_time={scrape_time}")
 
     conn = get_connection(database=DATABASE_NAME)
     try:
@@ -467,8 +479,8 @@ def save_to_mysql(rankings_data: list[dict], prev_date: Optional[date] = None) -
                 cur.execute(
                     """
                     INSERT INTO bbs_rankings
-                        (date, symbol, company_name, post_count, status, price, `change`, change_percent)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        (date, scrape_time, symbol, company_name, post_count, status, price, `change`, change_percent)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
                         company_name = VALUES(company_name),
                         post_count = VALUES(post_count),
@@ -478,7 +490,7 @@ def save_to_mysql(rankings_data: list[dict], prev_date: Optional[date] = None) -
                         change_percent = VALUES(change_percent)
                     """,
                     (
-                        today, symbol, entry.get('company_name'), post_count, status,
+                        today, scrape_time, symbol, entry.get('company_name'), post_count, status,
                         entry.get('price'), entry.get('change'), entry.get('change_percent'),
                     )
                 )
@@ -499,14 +511,14 @@ def save_to_mysql(rankings_data: list[dict], prev_date: Optional[date] = None) -
             for symbol in dropped:
                 cur.execute(
                     """
-                    INSERT INTO bbs_rankings (date, symbol, company_name, post_count, status)
-                    VALUES (%s, %s, NULL, NULL, 'dropped')
+                    INSERT INTO bbs_rankings (date, scrape_time, symbol, company_name, post_count, status)
+                    VALUES (%s, %s, %s, NULL, NULL, 'dropped')
                     ON DUPLICATE KEY UPDATE
                         status = 'dropped',
                         company_name = NULL,
                         post_count = NULL
                     """,
-                    (today, symbol)
+                    (today, scrape_time, symbol)
                 )
                 log.info("Marked '%s' as dropped.", symbol)
 
