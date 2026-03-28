@@ -5,10 +5,12 @@ from datetime import date, timedelta
 import pymysql
 import pymysql.cursors
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 from scraper import get_stock_data
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 
 def _db_config():
@@ -82,6 +84,8 @@ def bbs_dates():
 @app.route('/api/bbs-ranking', methods=['GET'])
 def bbs_ranking():
     date_str = request.args.get('date', str(date.today()))
+    scrape_time = request.args.get('scrape_time', '08:00:00')  # Default to 08:00
+    
     try:
         target = date.fromisoformat(date_str)
     except ValueError:
@@ -103,16 +107,17 @@ def bbs_ranking():
                     r.`change`,
                     r.change_percent,
                     r.status,
+                    r.scrape_time,
                     s.sentiment_score,
                     s.key_topics,
                     s.risk_level
                 FROM bbs_rankings r
                 LEFT JOIN bbs_sentiment s
-                    ON s.symbol = r.symbol AND s.date = r.date
-                WHERE r.date = %s
+                    ON s.symbol = r.symbol AND s.date = r.date AND s.scrape_time = r.scrape_time
+                WHERE r.date = %s AND r.scrape_time = %s
                 ORDER BY r.post_count DESC
                 """,
-                (target,)
+                (target, scrape_time)
             )
             rows = cur.fetchall()
 
@@ -150,16 +155,22 @@ def bbs_ranking():
 
 @app.route('/api/margin-symbols', methods=['GET'])
 def margin_symbols_get():
-    """Get list of tracked margin symbols."""
+    """Get list of tracked margin symbols with company names."""
     try:
         conn = _bbs_connection()
     except Exception as exc:
         return jsonify({'error': str(exc)}), 503
     try:
         with conn.cursor() as cur:
-            cur.execute('SELECT symbol FROM margin_tracking ORDER BY symbol')
+            cur.execute('SELECT symbol, company_name FROM margin_tracking ORDER BY symbol')
             rows = cur.fetchall()
-        symbols = [row['symbol'] for row in rows]
+        symbols = [
+            {
+                'symbol': row['symbol'],
+                'company_name': row['company_name'] or row['symbol']
+            }
+            for row in rows
+        ]
         return jsonify(symbols)
     except Exception as exc:
         return jsonify({'error': str(exc)}), 500
