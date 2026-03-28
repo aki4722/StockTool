@@ -324,19 +324,21 @@ def _posts_from_bbs_data(bbs_data: dict) -> list[str]:
 # Public API: fetch_bbs_rankings + fetch_bbs_posts
 # ---------------------------------------------------------------------------
 
-def fetch_bbs_posts(code: str, limit: int = 100) -> list[str]:
+def fetch_bbs_posts(code: str, limit: int = 100, retries: int = 2) -> list[str]:
     """
     Scrape up to `limit` latest posts from a stock's BBS page.
 
     Args:
         code: numeric/alphanum Yahoo Finance code, e.g. '6740'
         limit: maximum posts to return
+        retries: number of retries on failure
 
     Returns:
         List of post text strings.
     """
     posts: list[str] = []
     page = 0  # Yahoo Finance Japan uses 0-indexed pages for SSR content
+    retry_count = 0
 
     while len(posts) < limit:
         if page == 0:
@@ -346,12 +348,30 @@ def fetch_bbs_posts(code: str, limit: int = 100) -> list[str]:
 
         soup = _get_soup(url, timeout=60)  # Extended timeout for slower systems like Mac Mini
         if soup is None:
-            break
+            if retry_count < retries:
+                retry_count += 1
+                wait_time = 10 * retry_count  # Exponential backoff: 10s, 20s
+                log.warning(f"Failed to fetch {url}, retrying in {wait_time}s (attempt {retry_count}/{retries})...")
+                time.sleep(wait_time)
+                continue
+            else:
+                log.error(f"Failed to fetch {url} after {retries} retries, giving up")
+                break
 
         bbs_data = _extract_nextf_preloaded(soup)
         if not bbs_data:
-            log.warning("No BBS data found at %s", url)
-            break
+            if retry_count < retries and page == 0:  # Only retry on first page
+                retry_count += 1
+                wait_time = 10 * retry_count
+                log.warning(f"No BBS data at {url}, retrying in {wait_time}s (attempt {retry_count}/{retries})...")
+                time.sleep(wait_time)
+                continue
+            else:
+                log.warning("No BBS data found at %s", url)
+                break
+
+        # Success, reset retry counter
+        retry_count = 0
 
         page_posts = _posts_from_bbs_data(bbs_data)
         posts.extend(page_posts)
@@ -362,7 +382,7 @@ def fetch_bbs_posts(code: str, limit: int = 100) -> list[str]:
             break  # No more pages
 
         page += 1
-        time.sleep(0.3)
+        time.sleep(0.5)  # Slightly longer delay between pages
 
     return posts[:limit]
 
@@ -413,7 +433,18 @@ def fetch_bbs_rankings() -> list[dict]:
             'change': stock['change'] if stock else None,
             'change_percent': stock['change_percent'] if stock else None,
         })
-        time.sleep(0.5)  # polite delay between stocks
+        
+        # Polite delay between stocks (2-3 seconds to avoid rate limiting)
+        # Increase delay if we've hit errors recently
+        if i > 30 and not posts:  # If no posts after stock #30, slow down
+            delay = 5.0
+        elif i > 20:
+            delay = 3.0
+        else:
+            delay = 2.0
+        
+        log.debug(f"Waiting {delay}s before next stock...")
+        time.sleep(delay)
 
     return results
 
