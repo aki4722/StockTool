@@ -61,6 +61,7 @@ def setup_sentiment_table() -> None:
                     id              INT AUTO_INCREMENT PRIMARY KEY,
                     symbol          VARCHAR(20)   NOT NULL,
                     date            DATE          NOT NULL,
+                    scrape_time     TIME          NOT NULL DEFAULT '08:00:00',
                     sentiment_score FLOAT         NOT NULL COMMENT '-1.0 (bearish) to +1.0 (bullish)',
                     key_topics      TEXT          COMMENT 'JSON array of key topics',
                     risk_level      ENUM('low', 'medium', 'high') NOT NULL DEFAULT 'medium',
@@ -68,11 +69,21 @@ def setup_sentiment_table() -> None:
                     price           DECIMAL(12,2),
                     `change`        DECIMAL(12,2),
                     change_percent  DECIMAL(8,4),
-                    UNIQUE KEY uq_symbol_date (symbol, date),
+                    UNIQUE KEY uk_date_time_symbol (date, scrape_time, symbol),
                     INDEX idx_date (date)
                 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
             """)
 
+            # Add scrape_time column if it doesn't exist
+            try:
+                cur.execute("ALTER TABLE bbs_sentiment ADD COLUMN scrape_time TIME NOT NULL DEFAULT '08:00:00' AFTER date")
+                log.info("Added scrape_time column to bbs_sentiment")
+            except pymysql.err.OperationalError as exc:
+                if exc.args[0] == 1060:  # Duplicate column name
+                    pass
+                else:
+                    raise
+            
             # Add price columns to existing tables (safe on re-run; ignore duplicate column errors)
             for col, definition in [
                 ('price',          'DECIMAL(12,2)'),
@@ -86,6 +97,25 @@ def setup_sentiment_table() -> None:
                         pass
                     else:
                         raise
+            
+            # Drop old unique key and add new one with scrape_time
+            try:
+                cur.execute("ALTER TABLE bbs_sentiment DROP INDEX uq_symbol_date")
+                log.info("Dropped old unique key uq_symbol_date")
+            except pymysql.err.OperationalError as exc:
+                if exc.args[0] == 1091:  # Can't DROP index that doesn't exist
+                    pass
+                else:
+                    raise
+            
+            try:
+                cur.execute("ALTER TABLE bbs_sentiment ADD UNIQUE KEY uk_date_time_symbol (date, scrape_time, symbol)")
+                log.info("Added new unique key uk_date_time_symbol")
+            except pymysql.err.OperationalError as exc:
+                if exc.args[0] == 1061:  # Duplicate key name
+                    pass
+                else:
+                    raise
         conn.commit()
         log.info("bbs_sentiment table is ready.")
     finally:
