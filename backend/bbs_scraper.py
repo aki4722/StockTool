@@ -350,7 +350,7 @@ def fetch_bbs_posts(code: str, limit: int = 100, retries: int = 2) -> list[str]:
         if soup is None:
             if retry_count < retries:
                 retry_count += 1
-                wait_time = 10 * retry_count  # Exponential backoff: 10s, 20s
+                wait_time = 15 * retry_count  # Exponential backoff: 15s, 30s
                 log.warning(f"Failed to fetch {url}, retrying in {wait_time}s (attempt {retry_count}/{retries})...")
                 time.sleep(wait_time)
                 continue
@@ -362,7 +362,7 @@ def fetch_bbs_posts(code: str, limit: int = 100, retries: int = 2) -> list[str]:
         if not bbs_data:
             if retry_count < retries and page == 0:  # Only retry on first page
                 retry_count += 1
-                wait_time = 10 * retry_count
+                wait_time = 15 * retry_count  # Exponential backoff: 15s, 30s
                 log.warning(f"No BBS data at {url}, retrying in {wait_time}s (attempt {retry_count}/{retries})...")
                 time.sleep(wait_time)
                 continue
@@ -382,7 +382,7 @@ def fetch_bbs_posts(code: str, limit: int = 100, retries: int = 2) -> list[str]:
             break  # No more pages
 
         page += 1
-        time.sleep(0.5)  # Slightly longer delay between pages
+        time.sleep(1.0)  # Conservative delay between pages
 
     return posts[:limit]
 
@@ -434,14 +434,17 @@ def fetch_bbs_rankings() -> list[dict]:
             'change_percent': stock['change_percent'] if stock else None,
         })
         
-        # Polite delay between stocks (2-3 seconds to avoid rate limiting)
-        # Increase delay if we've hit errors recently
-        if i > 30 and not posts:  # If no posts after stock #30, slow down
+        # Conservative delays to avoid rate limiting (time is not a concern)
+        if i >= 40:
+            delay = 8.0
+        elif i >= 30:
+            delay = 6.0
+        elif i >= 20:
             delay = 5.0
-        elif i > 20:
-            delay = 3.0
+        elif i >= 10:
+            delay = 4.0
         else:
-            delay = 2.0
+            delay = 3.0
         
         log.debug(f"Waiting {delay}s before next stock...")
         time.sleep(delay)
