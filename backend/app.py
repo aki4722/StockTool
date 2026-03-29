@@ -151,6 +151,115 @@ def bbs_ranking():
         conn.close()
 
 
+@app.route('/api/bbs-ranking-csv', methods=['GET'])
+def bbs_ranking_csv():
+    """
+    Export BBS ranking as CSV with optional filters.
+    
+    Query params:
+      date: YYYY-MM-DD (default: today)
+      scrape_time: HH:MM:SS (default: 08:00:00)
+      sentiment_min: float (default: -1.0)
+      sentiment_max: float (default: 1.0)
+      risk_level: comma-separated (low,medium,high) (default: all)
+      status: comma-separated (new,existing,dropped) (default: all)
+    
+    Output format: symbol,company_name,TKY,,,,,,
+    """
+    date_str = request.args.get('date', str(date.today()))
+    scrape_time = request.args.get('scrape_time', '08:00:00')
+    
+    # Parse filter parameters
+    sentiment_min = float(request.args.get('sentiment_min', -1.0))
+    sentiment_max = float(request.args.get('sentiment_max', 1.0))
+    
+    risk_levels = request.args.get('risk_level', '').strip()
+    if risk_levels:
+        risk_levels = [r.strip() for r in risk_levels.split(',') if r.strip()]
+    else:
+        risk_levels = ['low', 'medium', 'high']
+    
+    statuses = request.args.get('status', '').strip()
+    if statuses:
+        statuses = [s.strip() for s in statuses.split(',') if s.strip()]
+    else:
+        statuses = ['new', 'existing', 'dropped']
+    
+    try:
+        target = date.fromisoformat(date_str)
+    except ValueError:
+        return 'Invalid date format', 400
+    
+    try:
+        conn = _bbs_connection()
+    except Exception as exc:
+        return f'Database error: {exc}', 503
+    
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    r.symbol,
+                    r.company_name,
+                    r.post_count,
+                    r.status,
+                    s.sentiment_score,
+                    s.risk_level
+                FROM bbs_rankings r
+                LEFT JOIN bbs_sentiment s
+                    ON s.symbol = r.symbol AND s.date = r.date AND s.scrape_time = r.scrape_time
+                WHERE r.date = %s AND r.scrape_time = %s
+                ORDER BY r.post_count DESC
+                """,
+                (target, scrape_time)
+            )
+            rows = cur.fetchall()
+        
+        # Apply filters
+        filtered = []
+        for row in rows:
+            # Sentiment filter
+            sentiment = row['sentiment_score']
+            if sentiment is not None:
+                if sentiment < sentiment_min or sentiment > sentiment_max:
+                    continue
+            
+            # Risk level filter
+            if row['risk_level'] and row['risk_level'] not in risk_levels:
+                continue
+            
+            # Status filter
+            if row['status'] not in statuses:
+                continue
+            
+            filtered.append(row)
+        
+        # Generate CSV
+        import io
+        output = io.StringIO()
+        for row in filtered:
+            symbol = row['symbol'].replace('.T', '')  # Remove .T suffix
+            company = row['company_name'] or ''
+            output.write(f"{symbol},{company},TKY,,,,,,\n")
+        
+        csv_data = output.getvalue()
+        
+        # Return as downloadable file
+        from flask import Response
+        return Response(
+            csv_data,
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename=bbs_ranking_{date_str}_{scrape_time.replace(":", "")}.csv'
+            }
+        )
+    except Exception as exc:
+        return f'Error: {exc}', 500
+    finally:
+        conn.close()
+
+
 # ===== MARGIN TRACKING ENDPOINTS =====
 
 @app.route('/api/margin-symbols', methods=['GET'])
