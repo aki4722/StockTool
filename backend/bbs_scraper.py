@@ -434,19 +434,13 @@ def fetch_bbs_rankings() -> list[dict]:
             'change_percent': stock['change_percent'] if stock else None,
         })
         
-        # Conservative delays to avoid rate limiting (time is not a concern)
-        if i >= 40:
-            delay = 8.0
-        elif i >= 30:
-            delay = 6.0
-        elif i >= 20:
-            delay = 5.0
-        elif i >= 10:
-            delay = 4.0
+        # Very conservative delays to completely avoid rate limiting (10-15 seconds)
+        if i >= 25:
+            delay = 15.0
         else:
-            delay = 3.0
+            delay = 10.0
         
-        log.debug(f"Waiting {delay}s before next stock...")
+        log.info(f"Waiting {delay}s before next stock...")
         time.sleep(delay)
 
     return results
