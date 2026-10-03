@@ -6,3 +6,4 @@ pymysql
 anthropic
 playwright
 python-dotenv
+flask-cors
