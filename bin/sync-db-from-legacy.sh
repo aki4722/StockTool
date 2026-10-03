@@ -1,6 +1,6 @@
 #!/bin/bash
-# Copy the StockTool tables from the legacy MySQL (stocktool-mysql-1, ~/StockTool)
-# into this environment's MySQL. Replaces those tables here (mysqldump emits
+# Refresh the VERIFICATION-ONLY MySQL (testdb profile) with the StockTool tables from
+# the production MySQL (stocktool-mysql-1). Replaces those tables in the verification DB (mysqldump emits
 # DROP TABLE IF EXISTS); never writes to the legacy database.
 # memocrip_* tables are left in the legacy DB (memocrip still connects there).
 set -euo pipefail
