@@ -408,4 +408,8 @@ def margin_data():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    # debug=True exposes the Werkzeug interactive debugger (remote code execution
+    # risk) to anyone who can reach this port. Only enable it explicitly for local
+    # development: FLASK_DEBUG=1 python3 app.py
+    debug = os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
+    app.run(host='0.0.0.0', port=5001, debug=debug)
