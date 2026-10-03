@@ -18,6 +18,7 @@ Page structure notes (as of 2026-03):
 
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -476,6 +477,17 @@ def _get_previous_symbols(conn: pymysql.Connection, prev_date: date) -> set[str]
     return {row['symbol'] for row in rows}
 
 
+def _db_float(value):
+    """Return value unchanged unless it is a non-finite float (inf/-inf/NaN).
+
+    yfinance occasionally reports e.g. trailingPE as Infinity; pymysql refuses to
+    encode non-finite floats, which used to abort the whole save. Store NULL instead.
+    """
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
+
+
 def save_to_mysql(rankings_data: list[dict], prev_date: Optional[date] = None) -> None:
     """
     Persist today's ranking data to MySQL.
@@ -540,9 +552,11 @@ def save_to_mysql(rankings_data: list[dict], prev_date: Optional[date] = None) -
                     """,
                     (
                         today, scrape_time, symbol, entry.get('company_name'), post_count, status,
-                        entry.get('price'), entry.get('change'), entry.get('change_percent'),
-                        entry.get('per'), entry.get('pbr'), entry.get('dividend_yield'),
-                        entry.get('equity_ratio'), entry.get('valuation_label'),
+                        *(_db_float(entry.get(k)) for k in (
+                            'price', 'change', 'change_percent',
+                            'per', 'pbr', 'dividend_yield', 'equity_ratio',
+                        )),
+                        entry.get('valuation_label'),
                     )
                 )
                 ranking_id = cur.lastrowid
