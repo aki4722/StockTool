@@ -4,6 +4,8 @@ $api_base = 'http://localhost:5001';
 $stocks  = [];
 $error   = null;
 
+include 'header.php';
+
 if ($raw) {
     $url      = $api_base . '/stocks?symbols=' . urlencode($raw);
     $response = @file_get_contents($url);
@@ -19,17 +21,8 @@ if ($raw) {
     }
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StockTool Dashboard</title>
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
     <div class="container dashboard-container">
-        <h1><a href="index.php">StockTool</a></h1>
+        <h1>Dashboard</h1>
 
         <form method="GET" action="dashboard.php" class="dash-form" onsubmit="this.elements.symbols.value=normalizeSymbols(this.elements.symbols.value)">
             <input type="text" name="symbols" value="<?= htmlspecialchars($raw) ?>" placeholder="AAPL, MSFT, 6178.T" required>
@@ -130,5 +123,4 @@ function updateAllStars() {
 }
 document.addEventListener('DOMContentLoaded', updateAllStars);
 </script>
-</body>
-</html>
+<?php include 'footer.php'; ?>

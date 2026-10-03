@@ -20,6 +20,8 @@ from dotenv import load_dotenv
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 
+from margin_targets import MARGIN_TARGETS, MARGIN_TARGET_SYMBOLS
+
 # Load environment variables from .env file in parent directory
 env_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -246,17 +248,26 @@ def create_tables(conn):
                 INDEX idx_symbol_date (symbol, date)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
+
+        cur.executemany(
+            """
+            INSERT INTO margin_tracking (symbol, company_name, added_date)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE company_name = VALUES(company_name)
+            """,
+            [
+                (item['symbol'], item['company_name'], date.today())
+                for item in MARGIN_TARGETS
+            ],
+        )
         
         conn.commit()
         log.info('Tables created/verified')
 
 
 def get_tracked_symbols(conn) -> list:
-    """Get list of symbols to track from database."""
-    with conn.cursor() as cur:
-        cur.execute('SELECT symbol FROM margin_tracking ORDER BY symbol')
-        results = cur.fetchall()
-        return [row['symbol'] for row in results]
+    """Get the fixed list of symbols to track."""
+    return list(MARGIN_TARGET_SYMBOLS)
 
 
 def save_margin_data(conn, symbol: str, data: dict):

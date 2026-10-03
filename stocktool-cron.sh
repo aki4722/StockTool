@@ -14,6 +14,23 @@ set +a
 
 # ログ開始
 LOG_FILE="/tmp/stocktool-macbook.log"
+LOCK_DIR="/tmp/stocktool-cron.lock"
+
+# 二重起動防止（mkdirロック）
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  {
+    echo "=== Cron job skipped at $(date) ==="
+    echo "Reason: another stocktool-cron.sh instance is already running."
+  } >> "$LOG_FILE" 2>&1
+  exit 0
+fi
+
+# スクリプト終了時にロック解除
+cleanup() {
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
 {
   echo "=== Cron job started at $(date) ==="
   echo "Environment: MYSQL_HOST=$MYSQL_HOST, ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:0:20}..."
@@ -25,13 +42,16 @@ LOG_FILE="/tmp/stocktool-macbook.log"
   SCRAPE_EXIT=$?
   echo "BBS scraping exit code: $SCRAPE_EXIT"
   
-  # Stage 2: 感情分析
-  echo "Stage 2: Analyzing sentiment..."
-  python3 sentiment_analyzer.py >> "$LOG_FILE" 2>&1
-  SENTIMENT_EXIT=$?
-  echo "Sentiment analysis exit code: $SENTIMENT_EXIT"
+  # Stage 2: 感情分析（停止中）
+  echo "Stage 2: Sentiment analysis is disabled (skipped)."
+  SENTIMENT_EXIT=0
+  echo "Sentiment analysis exit code: $SENTIMENT_EXIT (skipped)"
   
   echo "=== Cron job completed at $(date) ==="
 } >> "$LOG_FILE" 2>&1
+
+if [ "$SCRAPE_EXIT" -ne 0 ] || [ "$SENTIMENT_EXIT" -ne 0 ]; then
+  exit 1
+fi
 
 exit 0

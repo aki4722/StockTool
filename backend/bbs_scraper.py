@@ -98,6 +98,11 @@ def setup_database() -> None:
                     price          DECIMAL(12,2),
                     `change`       DECIMAL(12,2),
                     change_percent DECIMAL(8,4),
+                    per            DECIMAL(8,2),
+                    pbr            DECIMAL(8,2),
+                    dividend_yield DECIMAL(8,2),
+                    equity_ratio   DECIMAL(8,2),
+                    valuation_label ENUM('undervalued', 'neutral', 'overvalued') NULL,
                     INDEX idx_date        (date),
                     INDEX idx_symbol      (symbol),
                     INDEX idx_date_symbol (date, symbol)
@@ -109,6 +114,11 @@ def setup_database() -> None:
                 ('price',          'DECIMAL(12,2)'),
                 ('`change`',       'DECIMAL(12,2)'),
                 ('change_percent', 'DECIMAL(8,4)'),
+                ('per',            'DECIMAL(8,2)'),
+                ('pbr',            'DECIMAL(8,2)'),
+                ('dividend_yield', 'DECIMAL(8,2)'),
+                ('equity_ratio',   'DECIMAL(8,2)'),
+                ('valuation_label', "ENUM('undervalued', 'neutral', 'overvalued') NULL"),
             ]:
                 try:
                     cur.execute(f"ALTER TABLE bbs_rankings ADD COLUMN {col} {definition}")
@@ -432,6 +442,11 @@ def fetch_bbs_rankings() -> list[dict]:
             'price': stock['price'] if stock else None,
             'change': stock['change'] if stock else None,
             'change_percent': stock['change_percent'] if stock else None,
+            'per': stock['per'] if stock else None,
+            'pbr': stock['pbr'] if stock else None,
+            'dividend_yield': stock['dividend_yield'] if stock else None,
+            'equity_ratio': stock['equity_ratio'] if stock else None,
+            'valuation_label': stock['valuation_label'] if stock else None,
         })
         
         # Very conservative delays to completely avoid rate limiting (10-15 seconds)
@@ -507,19 +522,27 @@ def save_to_mysql(rankings_data: list[dict], prev_date: Optional[date] = None) -
                 cur.execute(
                     """
                     INSERT INTO bbs_rankings
-                        (date, scrape_time, symbol, company_name, post_count, status, price, `change`, change_percent)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        (date, scrape_time, symbol, company_name, post_count, status, price, `change`, change_percent,
+                         per, pbr, dividend_yield, equity_ratio, valuation_label)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
                         company_name = VALUES(company_name),
                         post_count = VALUES(post_count),
                         status = VALUES(status),
                         price = VALUES(price),
                         `change` = VALUES(`change`),
-                        change_percent = VALUES(change_percent)
+                        change_percent = VALUES(change_percent),
+                        per = VALUES(per),
+                        pbr = VALUES(pbr),
+                        dividend_yield = VALUES(dividend_yield),
+                        equity_ratio = VALUES(equity_ratio),
+                        valuation_label = VALUES(valuation_label)
                     """,
                     (
                         today, scrape_time, symbol, entry.get('company_name'), post_count, status,
                         entry.get('price'), entry.get('change'), entry.get('change_percent'),
+                        entry.get('per'), entry.get('pbr'), entry.get('dividend_yield'),
+                        entry.get('equity_ratio'), entry.get('valuation_label'),
                     )
                 )
                 ranking_id = cur.lastrowid
@@ -564,7 +587,7 @@ def save_to_mysql(rankings_data: list[dict], prev_date: Optional[date] = None) -
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    log.info("=== BBS Scraper: Stage 1 test run ===")
+    log.info("=== BBS Scraper: Stage 1 (Production) ===")
 
     # 1. Ensure DB + tables exist
     setup_database()

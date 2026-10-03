@@ -1,15 +1,7 @@
 <?php
 $api_base = 'http://localhost:5001';
+include 'header.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StockTool</title>
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
     <!-- Alert Banner -->
     <div id="alert-banner" style="display:none" class="alert-banner">
         <span id="alert-banner-text"></span>
@@ -285,5 +277,4 @@ document.addEventListener('DOMContentLoaded', () => {
     initAlertMonitoring();
 });
 </script>
-</body>
-</html>
+<?php include 'footer.php'; ?>

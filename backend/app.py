@@ -7,6 +7,7 @@ import pymysql.cursors
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
+from margin_targets import MARGIN_TARGETS, MARGIN_TARGET_SYMBOLS
 from scraper import get_stock_data
 
 app = Flask(__name__)
@@ -108,6 +109,11 @@ def bbs_ranking():
                     r.change_percent,
                     r.status,
                     r.scrape_time,
+                    r.per,
+                    r.pbr,
+                    r.dividend_yield,
+                    r.equity_ratio,
+                    r.valuation_label,
                     s.sentiment_score,
                     s.key_topics,
                     s.risk_level
@@ -143,6 +149,11 @@ def bbs_ranking():
                 'change':          float(row['change']) if row['change'] is not None else None,
                 'change_percent':  float(row['change_percent']) if row['change_percent'] is not None else None,
                 'status':          row['status'],
+                'per':             float(row['per']) if row['per'] is not None else None,
+                'pbr':             float(row['pbr']) if row['pbr'] is not None else None,
+                'dividend_yield':  float(row['dividend_yield']) if row['dividend_yield'] is not None else None,
+                'equity_ratio':    float(row['equity_ratio']) if row['equity_ratio'] is not None else None,
+                'valuation_label': row['valuation_label'],
             })
         return jsonify(results)
     except Exception as exc:
@@ -264,21 +275,29 @@ def bbs_ranking_csv():
 
 @app.route('/api/margin-symbols', methods=['GET'])
 def margin_symbols_get():
-    """Get list of tracked margin symbols with company names."""
+    """Get fixed list of tracked margin symbols with company names."""
     try:
         conn = _bbs_connection()
     except Exception as exc:
         return jsonify({'error': str(exc)}), 503
     try:
         with conn.cursor() as cur:
-            cur.execute('SELECT symbol, company_name FROM margin_tracking ORDER BY symbol')
+            cur.execute(
+                'SELECT symbol, company_name FROM margin_tracking WHERE symbol IN %s',
+                (MARGIN_TARGET_SYMBOLS,)
+            )
             rows = cur.fetchall()
+        company_names = {
+            row['symbol']: row['company_name']
+            for row in rows
+            if row['company_name']
+        }
         symbols = [
             {
-                'symbol': row['symbol'],
-                'company_name': row['company_name'] or row['symbol']
+                'symbol': item['symbol'],
+                'company_name': company_names.get(item['symbol']) or item['company_name']
             }
-            for row in rows
+            for item in MARGIN_TARGETS
         ]
         return jsonify(symbols)
     except Exception as exc:
@@ -353,8 +372,7 @@ def margin_data():
     try:
         with conn.cursor() as cur:
             # Get all symbols
-            cur.execute('SELECT symbol FROM margin_tracking ORDER BY symbol')
-            symbols = [row['symbol'] for row in cur.fetchall()]
+            symbols = list(MARGIN_TARGET_SYMBOLS)
             
             result = {}
             for symbol in symbols:

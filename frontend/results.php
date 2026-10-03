@@ -4,6 +4,8 @@ $api_base = 'http://localhost:5001';
 $data = null;
 $error = null;
 
+include 'header.php';
+
 if ($symbol) {
     $url = $api_base . '/stock/' . urlencode($symbol);
     $response = @file_get_contents($url);
@@ -18,17 +20,7 @@ if ($symbol) {
     }
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StockTool - <?= htmlspecialchars($symbol) ?></title>
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
     <div class="container">
-        <h1><a href="index.php">StockTool</a></h1>
         <?php if ($error): ?>
             <p class="error"><?= htmlspecialchars($error) ?></p>
         <?php elseif ($data): ?>
@@ -43,5 +35,4 @@ if ($symbol) {
         <?php endif; ?>
         <a href="index.php">← Back</a>
     </div>
-</body>
-</html>
+<?php include 'footer.php'; ?>

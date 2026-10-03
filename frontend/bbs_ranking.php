@@ -1,6 +1,8 @@
 <?php
 $api_base = 'http://localhost:5001';
 
+include 'header.php';
+
 // Fetch available dates
 $dates = [];
 $dates_resp = @file_get_contents($api_base . '/api/bbs-dates');
@@ -413,5 +415,4 @@ function toggleDetail(idx) {
     row.classList.toggle('row-detail-open', !open);
 }
 </script>
-</body>
-</html>
+<?php include 'footer.php'; ?>

@@ -85,6 +85,82 @@ def get_japanese_name(symbol: str) -> Optional[str]:
     return None
 
 
+def _safe_float(value) -> Optional[float]:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _fetch_equity_ratio(ticker: yf.Ticker) -> Optional[float]:
+    """Return equity ratio (%) from balance sheet if available.
+
+    equity_ratio = total_equity / total_assets * 100
+    """
+    try:
+        bs = ticker.balance_sheet
+        if bs is None or bs.empty:
+            return None
+
+        equity_keys = [
+            'Total Equity Gross Minority Interest',
+            'Stockholders Equity',
+            'Total Equity',
+        ]
+        assets_keys = [
+            'Total Assets',
+        ]
+
+        equity = None
+        assets = None
+
+        for key in equity_keys:
+            if key in bs.index:
+                equity = _safe_float(bs.loc[key].iloc[0])
+                if equity is not None:
+                    break
+
+        for key in assets_keys:
+            if key in bs.index:
+                assets = _safe_float(bs.loc[key].iloc[0])
+                if assets is not None:
+                    break
+
+        if equity is None or assets is None or assets == 0:
+            return None
+
+        return round((equity / assets) * 100, 2)
+    except Exception as e:
+        log.debug('Could not fetch equity ratio: %s', e)
+        return None
+
+
+def _valuation_label(per: Optional[float], pbr: Optional[float], equity_ratio: Optional[float]) -> Optional[str]:
+    if per is None and pbr is None and equity_ratio is None:
+        return None
+
+    # 割安候補
+    if (
+        per is not None and per < 12 and
+        pbr is not None and pbr < 1.2 and
+        equity_ratio is not None and equity_ratio >= 40
+    ):
+        return 'undervalued'
+
+    # 割高/注意
+    if (
+        (per is not None and per > 20) or
+        (pbr is not None and pbr > 2.0) or
+        (equity_ratio is not None and equity_ratio < 25)
+    ):
+        return 'overvalued'
+
+    # 中立
+    return 'neutral'
+
+
 def get_stock_data(symbol: str) -> Optional[dict]:
     log.debug('Fetching %s via yfinance history()', symbol)
     try:
@@ -104,21 +180,40 @@ def get_stock_data(symbol: str) -> Optional[dict]:
         log.error('yfinance error for %s: %s', symbol, e)
         return None
 
+    # Fundamentals
+    try:
+        info = ticker.info or {}
+    except Exception:
+        info = {}
+
+    per = _safe_float(info.get('trailingPE') or info.get('forwardPE'))
+    pbr = _safe_float(info.get('priceToBook'))
+
+    dividend_yield = _safe_float(info.get('dividendYield'))
+    if dividend_yield is not None:
+        dividend_yield = round(dividend_yield * 100, 2)  # fraction -> %
+
+    equity_ratio = _fetch_equity_ratio(ticker)
+    valuation_label = _valuation_label(per, pbr, equity_ratio)
+
     if symbol.endswith('.T'):
         name = get_japanese_name(symbol)
         if not name:
             # Final fallback: English name from yfinance
             try:
-                name = ticker.info.get('longName') or symbol
+                name = info.get('longName') or symbol
             except Exception:
                 name = symbol
     else:
         try:
-            name = ticker.info.get('longName') or symbol
+            name = info.get('longName') or symbol
         except Exception:
             name = symbol
 
-    log.info('Result — symbol=%s name=%s price=%s change=%s change_pct=%s', symbol, name, price, change, change_pct)
+    log.info(
+        'Result — symbol=%s name=%s price=%s change=%s change_pct=%s PER=%s PBR=%s equity_ratio=%s valuation=%s',
+        symbol, name, price, change, change_pct, per, pbr, equity_ratio, valuation_label
+    )
 
     return {
         'symbol': symbol,
@@ -126,4 +221,9 @@ def get_stock_data(symbol: str) -> Optional[dict]:
         'price': round(price, 2),
         'change': round(change, 2),
         'change_percent': round(change_pct, 2),
+        'per': round(per, 2) if per is not None else None,
+        'pbr': round(pbr, 2) if pbr is not None else None,
+        'dividend_yield': dividend_yield,
+        'equity_ratio': equity_ratio,
+        'valuation_label': valuation_label,
     }
