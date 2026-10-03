@@ -33,7 +33,7 @@ trap cleanup EXIT INT TERM
 
 {
   echo "=== Cron job started at $(date) ==="
-  echo "Environment: MYSQL_HOST=$MYSQL_HOST, ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:0:20}..."
+  echo "Environment: MYSQL_HOST=$MYSQL_HOST, ANTHROPIC_API_KEY=$([ -n "$ANTHROPIC_API_KEY" ] && echo set || echo MISSING)"
   
   # Stage 1: BBS スクレイピング
   echo "Stage 1: Scraping BBS posts..."
