@@ -54,24 +54,17 @@ bin/run-job.sh bbs                               # BBS スクレイプを手動�
      | `7e5a2134-c515-463a-a27b-b6d3e70b9bf1` | StockTool Backend 20:00 JST (stocktool-cron.sh) | 20:00 |
      | `d0f7d86b-8163-422e-ba82-a85e3d53165c` | StockTool Margin Scraper (Daily 17:00) | 17:00 |
      これらは結果を Discord (channel 1482885087652741141) に報告していた。切替後この報告は止まる。
-2. **Mac mini: ポート 80 を新 web に切り替える** (数秒の停止)
-   ```bash
-   cd ~/stocktool-integrated
-   docker stop stocktool-app-1          # 旧 web のみ。stocktool-mysql-1 と memocrip は止めない
-   sed -i 's/^WEB_HOST_PORT=.*/WEB_HOST_PORT=80/' .env
-   docker compose up -d web
-   ```
-3. **MacBook: Flask を止める** (旧 web が使っていた API。ここで初めて不要になる)
-   ```bash
-   launchctl bootout gui/$(id -u)/com.stocktool.backend
-   mv ~/Library/LaunchAgents/com.stocktool.backend.plist ~/Library/LaunchAgents.disabled/
-   launchctl bootout gui/$(id -u)/com.akimoto.stocktool.monitor     # MacBook のログ監視も不要
-   mv ~/Library/LaunchAgents/com.akimoto.stocktool.monitor.plist ~/Library/LaunchAgents.disabled/
-   ```
-4. **Mac mini: 定期実行を登録**: `crontab -l 2>/dev/null | cat - crontab.txt | crontab -`
-5. **検証用 MySQL を停止**: `docker compose --profile testdb stop mysql` (ボリュームは残す)
-6. **確認**: http://192.168.2.27/ の各ページ・`/memocrip/`、`launchctl list | grep stocktool` が空 (MacBook)、
-   次の 08:00/20:00 後に `logs/` と DB の当該スロット。
+2. **Mac mini: `bin/cutover.sh`** (数秒の停止)
+   事前チェック → `.env`/crontab をバックアップ (`backups/`) → `docker stop stocktool-app-1` →
+   新 web を :80 で起動 → `bin/smoke.sh 80` (失敗したら自動で `bin/rollback.sh`) →
+   crontab を差し替え (動いていない旧エントリ `~/StockTool/cron-bbs-scrape.sh` を削除し `crontab.txt` を追加。
+   メール監視のエントリはそのまま) → 検証用 MySQL を停止。
+   `stocktool-mysql-1` と memocrip には触らない。
+3. **MacBook: Flask とログ監視を止める** (旧 web が使っていた API。ここで初めて不要になる)
+4. **確認**: http://192.168.2.27/ の各ページ・`/memocrip/`、MacBook で `launchctl list | grep stocktool` が空。
+   初回の正式実行: 17:00 信用残 (`logs/margin-YYYYMM.log`、`margin_positions` の当日行)、
+   20:00 BBS (`logs/bbs-YYYYMM.log`、`bbs_rankings` の当日 20:00 スロット)。
+5. 動作確認後に各リポジトリの `integrated-env` を main へマージ。
 
 注意: 切替後は `~/StockTool/deploy.sh` や `~/StockTool` での `docker compose up` を実行しない
 (旧 web がポート 80 を取りに行く)。旧プロジェクトで触ってよいのは `stocktool-mysql-1` だけ。
@@ -79,15 +72,9 @@ bin/run-job.sh bbs                               # BBS スクレイプを手動�
 ## 切り戻し
 
 ```bash
-# Mac mini
-cd ~/stocktool-integrated
-crontab -l | grep -v stocktool-integrated | crontab -
-sed -i 's/^WEB_HOST_PORT=.*/WEB_HOST_PORT=8080/' .env && docker compose up -d web
-docker start stocktool-app-1
-# MacBook
-mv ~/Library/LaunchAgents.disabled/com.stocktool.*.plist ~/Library/LaunchAgents.disabled/com.akimoto.stocktool.monitor.plist ~/Library/LaunchAgents/
-for j in com.stocktool.backend com.stocktool.cron com.akimoto.stocktool.monitor; do launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/$j.plist; done
+~/stocktool-integrated/bin/rollback.sh        # Mac mini: 旧 web を :80 に戻し、新 web は :8080、crontab を復元
 ```
+MacBook 側は停止したジョブを元に戻す (MacBook 手順書の「切り戻し」)。
 DB は切替前後で同じ (`stocktool-mysql-1`) なので、データの戻し作業は不要。
 
 ## 未解決
