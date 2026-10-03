@@ -1,0 +1,6 @@
+.env
+# git worktrees of the application repos
+frontend/
+backend/
+logs/
+backups/
