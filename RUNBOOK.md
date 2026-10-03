@@ -38,15 +38,22 @@ bin/run-job.sh bbs                               # BBS スクレイプを手動�
 
 ## 本番切り替え
 
-前提: 切替前確認がすべて合格していること。MacBook 側の定期処理の起動元が特定済みであること。
+前提: 切替前確認がすべて合格していること。
 
 1. **MacBook: 定期処理を止める** (二重実行防止。利用者への影響なし)
-   ```bash
-   launchctl bootout gui/$(id -u)/com.stocktool.cron
-   # 信用残の起動元 (特定後に追記) も同様に停止
-   mkdir -p ~/Library/LaunchAgents.disabled
-   mv ~/Library/LaunchAgents/com.stocktool.cron.plist ~/Library/LaunchAgents.disabled/
-   ```
+   - launchd (BBS 08:00/20:00, `RunAtLoad` のためログイン時にも 1 回走る):
+     ```bash
+     launchctl bootout gui/$(id -u)/com.stocktool.cron
+     mkdir -p ~/Library/LaunchAgents.disabled
+     mv ~/Library/LaunchAgents/com.stocktool.cron.plist ~/Library/LaunchAgents.disabled/
+     ```
+   - OpenClaw の定期ジョブ 3 件を **無効化** (削除ではなく disable。他のジョブには触らない):
+     | ID | 名前 | 時刻 |
+     |---|---|---|
+     | `ca5c2d1a-b870-471c-b461-262181a96604` | StockTool Backend 08:00 JST (stocktool-cron.sh) | 08:00 |
+     | `7e5a2134-c515-463a-a27b-b6d3e70b9bf1` | StockTool Backend 20:00 JST (stocktool-cron.sh) | 20:00 |
+     | `d0f7d86b-8163-422e-ba82-a85e3d53165c` | StockTool Margin Scraper (Daily 17:00) | 17:00 |
+     これらは結果を Discord (channel 1482885087652741141) に報告していた。切替後この報告は止まる。
 2. **Mac mini: ポート 80 を新 web に切り替える** (数秒の停止)
    ```bash
    cd ~/stocktool-integrated
@@ -85,6 +92,7 @@ DB は切替前後で同じ (`stocktool-mysql-1`) なので、データの戻し
 
 ## 未解決
 
-- MacBook 側の信用残スクレイパー (毎日 08:00) の起動元が未特定。
+- Discord への実行結果通知 (旧 OpenClaw ジョブが担当) は新環境に未移植。
+- 旧 MySQL のタイムゾーンは UTC (`margin_positions.created_at` は UTC で記録される)。
 - `requirements.txt` はバージョン未固定。
 - 旧 MySQL のポート 3306 が LAN に公開されたまま (MacBook の Flask 停止後は不要)。
