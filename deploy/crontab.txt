@@ -2,5 +2,5 @@
 # Installed by bin/cutover.sh (removed again by bin/rollback.sh).
 # Times match the MacBook jobs they replace (BBS 08:00/20:00, margin 17:00 JST).
 # Sentiment analysis (Stage 2) is intentionally not scheduled.
-0 8,20 * * * /home/akimoto/stocktool-integrated/bin/run-job.sh bbs
-0 17 * * *   /home/akimoto/stocktool-integrated/bin/run-job.sh margin
+0 8,20 * * * /home/akimoto/stocktool-integrated/backend/deploy/bin/run-job.sh bbs
+0 17 * * *   /home/akimoto/stocktool-integrated/backend/deploy/bin/run-job.sh margin

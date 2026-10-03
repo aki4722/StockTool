@@ -16,7 +16,15 @@ browser ─▶ web (nginx+PHP) ─▶ backend (gunicorn+Playwright) ─▶ stock
 | `backend` | Flask on gunicorn + Playwright (StockTool backend, branch `integrated-env`) | `127.0.0.1:15001` のみ |
 | `mysql` | **検証専用** MySQL 8.0 (`COMPOSE_PROFILES=testdb` の時だけ起動)。本番では使わない | 公開しない |
 
-- `frontend/` `backend/` は各アプリリポジトリの git worktree。コード変更はそれぞれのリポジトリでコミットする。
+- ディレクトリ配置 (Mac mini):
+  ```
+  ~/stocktool-integrated/                 ← ビルドコンテキスト
+  ├── frontend/        StockTool-Frontend の worktree (branch integrated-env)
+  └── backend/         StockTool の worktree (branch integrated-env)
+      └── deploy/      ← この手順書。compose はここで実行する
+          ├── .env  logs/  backups/       (git 管理外: 秘密情報・実行時データ)
+  ```
+  コード変更はそれぞれのリポジトリでコミットする。ビルド時の除外は `docker/*.Dockerfile.dockerignore`。
 - `web` `backend` は旧ネットワーク `stocktool_default` にも参加し、`stocktool-mysql-1` と memocrip に名前で到達する。
 - backend の DB 接続先は `.env` の `BACKEND_MYSQL_HOST` / `BACKEND_MYSQL_PASSWORD` (本番: `stocktool-mysql-1`)。
 - センチメント分析 (Stage 2) は無効。`ANTHROPIC_API_KEY` は渡していない。
@@ -25,7 +33,7 @@ browser ─▶ web (nginx+PHP) ─▶ backend (gunicorn+Playwright) ─▶ stock
 ## よく使うコマンド
 
 ```bash
-cd ~/stocktool-integrated
+cd ~/stocktool-integrated/backend/deploy
 docker compose ps
 docker compose logs -f backend
 docker compose build && docker compose up -d     # コード更新の反映
@@ -72,7 +80,7 @@ bin/run-job.sh bbs                               # BBS スクレイプを手動�
 ## 切り戻し
 
 ```bash
-~/stocktool-integrated/bin/rollback.sh        # Mac mini: 旧 web を :80 に戻し、新 web は :8080、crontab を復元
+~/stocktool-integrated/backend/deploy/bin/rollback.sh        # Mac mini: 旧 web を :80 に戻し、新 web は :8080、crontab を復元
 ```
 MacBook 側は停止したジョブを元に戻す (MacBook 手順書の「切り戻し」)。
 DB は切替前後で同じ (`stocktool-mysql-1`) なので、データの戻し作業は不要。

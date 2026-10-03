@@ -10,7 +10,7 @@ MacBook (192.168.2.15) で StockTool を動かしていた起動元:
 | 信用残 (`margin_scraper.py`) | OpenClaw `d0f7d86b-8163-422e-ba82-a85e3d53165c` | 17:00 |
 | ログ監視 (`monitor-stocktool.sh`) | launchd `com.akimoto.stocktool.monitor` | 10 分ごと |
 
-## フェーズ 1: 定期処理の停止 (Mac mini の `bin/cutover.sh` より前)
+## フェーズ 1: 定期処理の停止 (Mac mini の `deploy/bin/cutover.sh` より前)
 
 ```bash
 # 1-0. 実行中のジョブが無いことを確認 (あれば終わるまで待つ)

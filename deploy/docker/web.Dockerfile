@@ -11,8 +11,8 @@ RUN apt-get update \
     && rm -f /etc/nginx/sites-enabled/default /var/www/html/index.nginx-debian.html \
     && mkdir -p /run/php
 
-COPY docker/nginx.conf /etc/nginx/conf.d/stocktool.conf
-COPY docker/supervisord.conf /etc/supervisor/conf.d/stocktool.conf
+COPY backend/deploy/docker/nginx.conf /etc/nginx/conf.d/stocktool.conf
+COPY backend/deploy/docker/supervisord.conf /etc/supervisor/conf.d/stocktool.conf
 COPY frontend/*.php /var/www/html/
 COPY frontend/css/ /var/www/html/css/
 

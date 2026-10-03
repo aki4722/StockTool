@@ -19,10 +19,10 @@ if [ -n "$ts" ] && [ -f "backups/crontab.$ts" ]; then
   crontab "backups/crontab.$ts"
 else
   step "no crontab backup found; removing run-job entries only"
-  crontab -l 2>/dev/null | grep -vF 'stocktool-integrated/bin/run-job.sh' | crontab -
+  crontab -l 2>/dev/null | grep -vF 'bin/run-job.sh' | crontab -
 fi
 
-sleep 3
+for i in $(seq 1 60); do curl -s -o /dev/null -m 2 http://127.0.0.1/bbs_ranking.php && break; sleep 1; done
 step "check :80 (legacy) and :8080 (new)"
 curl -s -o /dev/null -w ':80   -> %{http_code}\n' http://127.0.0.1/bbs_ranking.php
 curl -s -o /dev/null -w ':8080 -> %{http_code}\n' http://127.0.0.1:8080/bbs_ranking.php

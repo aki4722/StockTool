@@ -26,7 +26,7 @@ docker stop stocktool-app-1
 step "start new web on :80"
 sed -i 's/^WEB_HOST_PORT=.*/WEB_HOST_PORT=80/' .env
 docker compose up -d web
-sleep 3
+for i in $(seq 1 60); do curl -s -o /dev/null -m 2 http://127.0.0.1/health && break; sleep 1; done
 
 step "smoke test :80"
 if ! bin/smoke.sh 80; then
@@ -36,7 +36,7 @@ if ! bin/smoke.sh 80; then
 fi
 
 step "crontab: drop dead legacy entry, add scheduled jobs"
-{ grep -vF '/home/akimoto/StockTool/cron-bbs-scrape.sh' "backups/crontab.$ts" | grep -vF 'stocktool-integrated/bin/run-job.sh' || true
+{ grep -vF '/home/akimoto/StockTool/cron-bbs-scrape.sh' "backups/crontab.$ts" | grep -vF 'bin/run-job.sh' || true
   cat crontab.txt; } | crontab -
 crontab -l | grep -E 'run-job|cron-bbs' || true
 

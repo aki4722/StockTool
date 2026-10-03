@@ -1,6 +1,5 @@
+# Secrets and runtime data (never commit)
 .env
-# git worktrees of the application repos
-frontend/
-backend/
+.env.*
 logs/
 backups/

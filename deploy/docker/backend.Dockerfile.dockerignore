@@ -1,0 +1,10 @@
+# Build context is ~/stocktool-integrated (parent of the backend/ and frontend/ worktrees).
+# Keep secrets and runtime data out of the image build context.
+**/.git
+**/.env
+**/.env.*
+**/__pycache__
+**/venv
+backend/frontend
+backend/deploy/logs
+backend/deploy/backups
