@@ -1,0 +1,73 @@
+# StockTool integrated environment: frontend (nginx+PHP) + backend (Flask/gunicorn
+# + Playwright scrapers) + MySQL on one host. Independent of the legacy
+# ~/StockTool stack: own project name, ports, volume and passwords.
+name: stocktool-integrated
+
+services:
+  mysql:
+    image: mysql:8.0
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set in .env}
+      MYSQL_DATABASE: stocktool_bbs
+      MYSQL_USER: stocktool
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set in .env}
+      TZ: Asia/Tokyo
+    volumes:
+      - mysql_data:/var/lib/mysql
+    # No published port: use `docker compose exec mysql mysql ...` for admin access.
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h localhost -uroot --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: stocktool
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: stocktool_bbs
+      TZ: Asia/Tokyo
+      # Sentiment analysis stays disabled: no ANTHROPIC_API_KEY on purpose.
+    ports:
+      - "127.0.0.1:${BACKEND_HOST_PORT:-15001}:5001"   # local debugging only
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    environment:
+      STOCKTOOL_API_BASE: http://backend:5001
+      TZ: Asia/Tokyo
+    ports:
+      - "${WEB_HOST_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - default
+      - legacy   # reach memocrip (on the legacy stocktool_default network) for /memocrip/
+    restart: unless-stopped
+
+networks:
+  legacy:
+    external: true
+    name: stocktool_default
+
+volumes:
+  mysql_data:
